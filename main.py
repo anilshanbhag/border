@@ -235,7 +235,7 @@ def drawCorner(corner,dash,gap,dir):
 	#Start angle [0,2*pi]
 	startAngle = calcAngle + absToParam(start,curveDims[(corner+1)%2],curveDims[corner%2])
 	
-	print "test",start*180/pi,curveDims[(corner+1)%2],curveDims[corner%2],absToParam(start,curveDims[(corner+1)%2],curveDims[corner%2])*180/pi
+	#print "test",start*180/pi,curveDims[(corner+1)%2],curveDims[corner%2],absToParam(start,curveDims[(corner+1)%2],curveDims[corner%2])*180/pi
 									
 	current = startAngle
 	previous = current
@@ -251,7 +251,7 @@ def drawCorner(corner,dash,gap,dir):
 	curlen = 0.0
 	flag = 0
 	
-	print start*180.0/pi,startAngle*180.0/pi,endAngle*180.0/pi,currentI*180.0/pi,currentO*180.0/pi
+	#print start*180.0/pi,startAngle*180.0/pi,endAngle*180.0/pi,currentI*180.0/pi,currentO*180.0/pi
 	
 	while curlen<dash/2:
 		current += dir*delta*pi/180
@@ -281,8 +281,8 @@ def drawCorner(corner,dash,gap,dir):
 	ctx.fill()
 	
 	#print current,currentI,currentO
-	print iCurveDims[0]*cos(currentI),iCurveDims[1]*sin(currentI)
-	print oCurveDims[0]*cos(currentO),oCurveDims[1]*sin(currentO)	
+	#print iCurveDims[0]*cos(currentI),iCurveDims[1]*sin(currentI)
+	#print oCurveDims[0]*cos(currentO),oCurveDims[1]*sin(currentO)	
 	previous = current
 	curlen=0
 	
@@ -330,8 +330,8 @@ def drawCorner(corner,dash,gap,dir):
 		ctx.close_path()
 		ctx.fill()
 		
-		print iCurveDims[0]*cos(currentI),iCurveDims[1]*sin(currentI)
-		print oCurveDims[0]*cos(currentO),oCurveDims[1]*sin(currentO)
+		#print iCurveDims[0]*cos(currentI),iCurveDims[1]*sin(currentI)
+		#print oCurveDims[0]*cos(currentO),oCurveDims[1]*sin(currentO)
 		
 		previous = current
 		curlen=0
