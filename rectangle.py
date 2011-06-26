@@ -75,6 +75,8 @@ class Rectangle:
     
         #Get dashLength, gapLength and offset 
         dashLength = self.dashLength
+        #Cairo starts stroking by default with dash .
+        #Offset is used to shift pattern start point.
         gapLength,offset = self.calculateDashes(sideIndex) 
     
         #dashed - >  Parameter required for dashed stroking
@@ -131,8 +133,7 @@ class Rectangle:
         if curvedLengthL < dashLength/2:
             offset = curvedLengthL + dashLength/2
         else:
-            offset = curvedLengthL + dashLength/2 - \
-                  floor((curvedLengthL-dashLength/2)/(dashLength + gapLength))*(dashLength + gapLength)
+            offset = (curvedLengthL - dashLength/2)%(dashLength + gapLength) + dashLength
     
         return (gapLength, offset/self.borderLengths[sideIndex])
     
@@ -347,6 +348,8 @@ class Rectangle:
         # While moving clockwise current decreases whereas while moving ccw 
         # current increases . 
         # The dir provided is used to choose increment/decrement
+        
+        # First try to draw half a dash 
         while curlen<dash/2:
             current += dir*delta
             curlen += R * self.EllipseE(k, current, current - dir*delta)
@@ -357,7 +360,13 @@ class Rectangle:
         if dir*current > dir*endAngle:
             current = endAngle
             flag = 1
-
+        
+        # atan has range[-pi/2,pi/2] 
+        # so while calling absToParam or paramToAbs we convert to
+        # an angle in range[-pi/2,pi/2] and then convert back
+        
+        # here we convert current into absolute angle and then convert 
+        # it back into parameteric angle currentO
         currentO = self.absToParam(
                         self.paramToAbs(current - calcAngle, 
                                         curveDims[(corner + 1)%2], curveDims[corner%2]), 
@@ -369,12 +378,14 @@ class Rectangle:
                                         curveDims[(corner + 1)%2], curveDims[corner%2]), 
                         iCurveDims[(corner + 1)%2], iCurveDims[corner%2]
                     ) + calcAngle
-
+        
+        #Consider dividing the curves into 30 sections each.
         stepO = (currentO - previousO)/30
         stepI = (currentI - previousI)/30
     
         ctx.move_to(oCurveDims[0] * cos(previousO)/width, oCurveDims[1] * sin(previousO)/height)
-
+        
+        #Iterate over to get the curved path .Here i in [1,30]  
         for i in range(1, 31):
             ctx.line_to(oCurveDims[0] * cos(previousO + stepO*i)/width,
                         oCurveDims[1] * sin(previousO + stepO*i)/height)
@@ -393,7 +404,9 @@ class Rectangle:
     
         if flag:
             return
-    
+        
+        # If we reach this point it means we havent reached endAngle
+        # Now alternatively draw the gap , dash pattern  
         while True:
             while curlen<gap:
                 current += dir*delta
@@ -465,7 +478,8 @@ class Rectangle:
             
         ctx.restore()
     
-    def writeSurface():
+    def writeSurface(self):
+        """Write out the surface to png file"""
         try:
             self.surface.write_to_png (self.outputFile + '.png') 
         except:
