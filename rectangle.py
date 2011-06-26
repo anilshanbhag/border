@@ -13,11 +13,13 @@ class Rectangle:
     def __init__(self,inp):
         self.parse(inp)
         
+        # Cairo initialization
         self.surface = cairo.ImageSurface (cairo.FORMAT_ARGB32, int(self.width), int(self.height))
         self.ctx = cairo.Context (self.surface)
         self.ctx.scale (self.width, self.height)
         
-        self.delta = 0.1*pi/180
+        # Precision of angle measurement
+        self.delta = 0.1 * pi/180
         
         self.initInnerRadii()
     
@@ -40,8 +42,8 @@ class Rectangle:
         self.dashLength = max(self.borderSizes)*2
         
     def draw(self):
-        """ 
-        """
+        """Draws the entire rectangle""" 
+        
         #Set the color for drawing & draw each side
         self.ctx.set_source_rgb (1.0, 0.0, 0.0)
         self.drawDashedSide(T)
@@ -83,7 +85,7 @@ class Rectangle:
         #Visual shown for top side: 
         #Corner section left of side drawn clockwise till 1, line from 1 to 2
         #Corner section right of side drawn anticlockwise till 2 
-        #        1____________________2
+        #       1____________________2
         #      /                     \
         #     /                       \
     
@@ -130,7 +132,7 @@ class Rectangle:
             offset = curvedLengthL + dashLength/2
         else:
             offset = curvedLengthL + dashLength/2 - \
-            		floor((curvedLengthL-dashLength/2)/(dashLength + gapLength))*(dashLength + gapLength)
+                  floor((curvedLengthL-dashLength/2)/(dashLength + gapLength))*(dashLength + gapLength)
     
         return (gapLength, offset/self.borderLengths[sideIndex])
     
@@ -198,7 +200,8 @@ class Rectangle:
         """
         def func(x, t):
             return sqrt(1-x*sin(t)*sin(t))
-        return abs(ph2-ph1)/8*(func(k, ph1) + 3*func(k, (2*ph1 + ph2)/3) + 3*func(k, (ph1 + 2*ph2)/3) + func(k, ph2))
+        return abs(ph2-ph1)/8*(func(k, ph1) + 3*func(k, (2*ph1 + ph2)/3) + \
+                               3*func(k, (ph1 + 2*ph2)/3) + func(k, ph2))
 
     def drawStraightSection(self,sideIndex, dashes, offset):    
         """ Draws the straight section of given side """
@@ -298,7 +301,8 @@ class Rectangle:
                      (oCurveDims[1] + iCurveDims[1])/2]
     
         # start represents angle in  [0, pi/2]
-        start = self.borderSizes[corner]/(self.borderSizes[(corner-1)%4] + self.borderSizes[corner]) * pi/2
+        combinedSize = self.borderSizes[(corner-1)%4] + self.borderSizes[corner]
+        start = self.borderSizes[corner]/combinedSize * pi/2
     
         # End Angle [0, 2*pi] 
         # (2-corner)%4*pi/2 is when drawing anticlockwise
@@ -372,12 +376,14 @@ class Rectangle:
         ctx.move_to(oCurveDims[0] * cos(previousO)/width, oCurveDims[1] * sin(previousO)/height)
 
         for i in range(1, 31):
-            ctx.line_to(oCurveDims[0] * cos(previousO + stepO*i)/width, oCurveDims[1] * sin(previousO + stepO*i)/height)
+            ctx.line_to(oCurveDims[0] * cos(previousO + stepO*i)/width,
+                        oCurveDims[1] * sin(previousO + stepO*i)/height)
     
         ctx.line_to(iCurveDims[0] * cos(currentI)/width, iCurveDims[1] * sin(currentI)/height)
     
         for i in range(1, 31):
-            ctx.line_to(iCurveDims[0] * cos(currentI - stepI*i)/width, iCurveDims[1] * sin(currentI - stepI*i)/height)
+            ctx.line_to(iCurveDims[0] * cos(currentI - stepI*i)/width,
+                        iCurveDims[1] * sin(currentI - stepI*i)/height)
     
         ctx.close_path()
         ctx.fill()
@@ -436,15 +442,17 @@ class Rectangle:
             stepO = (currentO - previousO)/30
             stepI = (currentI - previousI)/30
         
-            ctx.move_to(oCurveDims[0]*cos(previousO)/width, oCurveDims[1]*sin(previousO)/height)
+            ctx.move_to(oCurveDims[0] * cos(previousO)/width, oCurveDims[1] * sin(previousO)/height)
     
             for i in range(1, 31):
-                ctx.line_to(oCurveDims[0]*cos(previousO + stepO*i)/width, oCurveDims[1]*sin(previousO + stepO*i)/height)
+                ctx.line_to(oCurveDims[0] * cos(previousO + stepO*i)/width,
+                            oCurveDims[1] * sin(previousO + stepO*i)/height)
         
             ctx.line_to(iCurveDims[0]*cos(currentI)/width, iCurveDims[1]*sin(currentI)/height)
         
             for i in range(1, 31):
-                ctx.line_to(iCurveDims[0]*cos(currentI-stepI*i)/width, iCurveDims[1]*sin(currentI-stepI*i)/height)
+                ctx.line_to(iCurveDims[0] * cos(currentI - stepI*i)/width,
+                            iCurveDims[1] * sin(currentI - stepI*i)/height)
         
             ctx.close_path()
             ctx.fill()
