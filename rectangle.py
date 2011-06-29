@@ -14,15 +14,20 @@ class Rectangle:
         self.parse(inp)
         
         # Cairo initialization
-        self.surface = cairo.ImageSurface (cairo.FORMAT_ARGB32, int(self.width), int(self.height))
-        self.ctx = cairo.Context (self.surface)
-        self.ctx.scale (self.width, self.height)
-        
+        try:
+            self.surface = cairo.ImageSurface (cairo.FORMAT_ARGB32, int(self.width), int(self.height))
+            self.ctx = cairo.Context (self.surface)
+            self.ctx.scale (self.width, self.height)
+        except:
+            pass
+            
         # Precision of angle measurement
         self.delta = 0.1 * pi/180
         
+        # Handle cases where sum of adj borderRadii > borderLength
+        self.normalize()
         self.initInnerRadii()
-    
+            
     def parse(self,inp):
         """
         Input from file :
@@ -32,6 +37,7 @@ class Rectangle:
         Comment lines start with #
         """
         line = inp.rstrip('\r\n')
+        line = line.replace(',',' ')
         parts = line.split()
         
         self.outputFile, self.width, self.height = parts[0], float(parts[1]), float(parts[2])
@@ -40,9 +46,31 @@ class Rectangle:
         self.borderRadii = [[float(parts[m]), float(parts[m + 1])] for m in range(7, 15, 2)]
         self.innerRadii = [[0, 0], [0, 0], [0, 0], [0, 0]]
         self.dashLength = max(self.borderSizes)*2
-        
+
+    def initInnerRadii(self):
+        """ Initializes the innerRadii for all corners """ 
+        for i in range(0, 4):
+            if(i%2 == 0):    
+                self.innerRadii[i][0] = max(self.borderRadii[i][0] - self.borderSizes[(i-1)%4],0)
+                self.innerRadii[i][1] = max(self.borderRadii[i][1] - self.borderSizes[i],0)
+            else:
+                self.innerRadii[i][0] = max(self.borderRadii[i][0] - self.borderSizes[i],0)
+                self.innerRadii[i][1] = max(self.borderRadii[i][1] - self.borderSizes[(i-1)%4],0)
+
+    def normalize(self):
+        borderRadii = self.borderRadii
+        borderLengths = self.borderLengths
+        for i in range(0,4):
+            if borderRadii[i][i%2] + borderRadii[(i+1)%4][i%2] > borderLengths[i]:
+                ratio = borderLengths[i]/(borderRadii[i][i%2] + borderRadii[(i+1)%4][i%2])
+                borderRadii[i] = [m*ratio for m in borderRadii[i]]
+                borderRadii[(i+1)%4] = [m*ratio for m in borderRadii[(i+1)%4]]
+         
     def draw(self):
         """Draws the entire rectangle""" 
+        
+        if not (self.width and self.height):
+            return
         
         #Set the color for drawing & draw each side
         self.ctx.set_source_rgb (1.0, 0.0, 0.0)
@@ -60,16 +88,6 @@ class Rectangle:
         #Writing out the surface to png file
         self.surface.write_to_png (self.outputFile + '.png') 
 
-    def initInnerRadii(self):
-        """ Initializes the innerRadii for all corners """ 
-        for i in range(0, 4):
-            if(i%2 == 0):    
-                self.innerRadii[i][0] = max(self.borderRadii[i][0] - self.borderSizes[(i-1)%4], 0)
-                self.innerRadii[i][1] = max(self.borderRadii[i][1] - self.borderSizes[i], 0)
-            else:
-                self.innerRadii[i][0] = max(self.borderRadii[i][0] - self.borderSizes[i], 0)
-                self.innerRadii[i][1] = max(self.borderRadii[i][1] - self.borderSizes[(i-1)%4], 0)
-            
     def drawDashedSide(self,sideIndex):
         """ Draws the side with given sideIndex    """
     
@@ -95,11 +113,18 @@ class Rectangle:
         self.drawStraightSection(sideIndex, dashes, offset)
 
         #Draw left section
-        self.drawCorner(sideIndex, dashLength, gapLength, -1)
+        if all(self.innerRadii[sideIndex]):
+            self.drawCorner(sideIndex, dashLength, gapLength, -1)
     
         #Draw right section 
-        self.drawCorner((sideIndex + 1)%4, dashLength, gapLength, 1)            
-
+        #All corners are drawn in 2 steps - if innerRadii<0 its enough to handle once
+        #And draw a solid corner
+        cornerR = (sideIndex + 1)%4 
+        if all(self.innerRadii[cornerR]):
+            self.drawCorner(cornerR, dashLength, gapLength, 1)            
+        else:
+            self.drawSolidCorner(cornerR)
+            
     def calculateDashes(self,sideIndex):
         """For a particular side computes the [gap width, offsetRaw] for that side """
     
@@ -161,10 +186,13 @@ class Rectangle:
     
         # b is the other radius 
         b = (self.borderRadii[cornerIndex][sideIndex%2] + self.innerRadii[cornerIndex][sideIndex%2])/2
-    
+        
+        if not (a and b):
+            return 0
+        
         borderSizes = self.borderSizes
         combinedSize = borderSizes[sideIndex] + borderSizes[(sideIndex-1)%4]
-    
+       
         # t is the demarcating angle 
         
         if sideIndex==cornerIndex: 
@@ -179,7 +207,7 @@ class Rectangle:
         # When a is along major axis or along minor axis
         # Depending on this we need to choose appropriate limits 
         # In general if R,r are length of semi major axis and semi minor axis
-        # Then all points on ellipse of the from (R*cosT , r*sinT)    
+        # Then all points on ellipse are of the from (R*cosT , r*sinT)    
         # Also we have y = x*tan(t)
         # Using appropriate reference frames we get : 
         if a >= b:
@@ -478,12 +506,79 @@ class Rectangle:
             
         ctx.restore()
     
+    def drawSolidCorner(self,corner):
+        """Fills the corner section : FillStyle - solid"""
+        #Check if borderRadii exists at that corner
+
+        borderRadii = (self.borderRadii[corner][0]/self.width, 
+                      self.borderRadii[corner][1]/self.height)
+        ctx = self.ctx
+        
+        if not all(borderRadii):
+            offsetX,offsetY = 0.0,0.0
+            if corner in [TR,BR]:
+                offsetX = 1 - borderRadii[0]
+            if corner in [BL,BR]:
+                offsetY = 1 - borderRadii[1]            
+            ctx.rectangle(offsetX,offsetY,
+                          borderRadii[0],borderRadii[1])        
+            ctx.fill()
+        
+        else:
+                        
+            alpha = 0.55191497
+            
+            if corner == TL: 
+                cornerX, cornerY = borderRadii[0], borderRadii[1]
+            elif corner == TR: 
+                cornerX, cornerY = 1.0 - borderRadii[0], borderRadii[1]
+            elif corner == BR: 
+                cornerX, cornerY = 1.0 - borderRadii[0], 1.0 - borderRadii[1]
+            elif corner == BL: 
+                cornerX, cornerY = borderRadii[0], 1.0 - borderRadii[1]            
+            
+            # p0 = p1 = p2 = p3 <- This will not work
+            p0 = {}
+            p1 = {}
+            p2 = {}
+            p3 = {}
+
+            ctx.save()
+            ctx.translate(cornerX, cornerY) # Move to corner center
+            cornerMults = ((-1,-1),(1,-1),(1,1),(-1,1))
+            
+            cornerMult = cornerMults[corner]
+            #cornerMult = (1,1)
+            p0[0] = cornerMult[0] * borderRadii[0]
+            p0[1] = 0.0
+
+            p3[0] = 0.0
+            p3[1] = cornerMult[1] * borderRadii[1]
+
+            p1[0] = p0[0]  
+            p1[1] = p3[1] * alpha
+
+            p2[0] = p0[0] * alpha
+            p2[1] = p3[1]
+            
+            ctx.move_to(0.0,0.0)
+            ctx.line_to(p0[0],p0[1])
+            ctx.curve_to(p1[0],p1[1],p2[0],p2[1],p3[0],p3[1])
+            ctx.close_path()
+            ctx.fill()
+            ctx.restore()
+    
     def writeSurface(self):
         """Write out the surface to png file"""
         try:
             self.surface.write_to_png (self.outputFile + '.png') 
         except:
             "Init parameters first"
+
+class Point:
+    def __init__(x=0,y=0):
+        self.x = x
+        self.y = y
         
 if __name__ == '__main__':
     
@@ -502,10 +597,9 @@ if __name__ == '__main__':
         if '#' in inp:
             continue
         else:
-            try:
-                rectangle = Rectangle(inp)
-                rectangle.draw()
-            except:
-                print 'Bad Formatting in ',inp
-                continue
+            rectangle = Rectangle(inp)
+            rectangle.draw()
+            #except:
+            #    print 'Bad Formatting in ',inp
+            #    continue
 

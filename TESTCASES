@@ -1,11 +1,35 @@
 #Use python syntax highlighting to differentiate comments
-#Simple
+#Use the following syntax
+# outputFile width height borderWidthsx4 borderRadiix8
+#Use ',' or ' ' for seperating the values 
+#Simple Status : Ok
 t1 800 600 50 50 50 50 100 100 100 100 100 100 100 100
-#Thin border
+#Thin border Status : Ok
 t2 800 600 50 50 5 50 100 100 100 100 100 100 100 100
-#Width = 0 
+#Width = 0 Status : Ok
 t3 800 600 50 50 0 50 100 100 100 100 100 100 100 100
-#Ellipse 
+#Ellipse Status : Ok
 t4 800 600 50 50 50 50 400 300 400 300 400 300 400 300
-#Normal case - thin border
+#Normal case - thin border - Status : Ok
 t5 800 600 5 5 5 5 300 300 100 100 100 100 300 300
+#No border-radius - Status : Ok
+t6 800 600 20 20 20 20 0 0 100 100 100 100 300 300
+#border radius normalized Status : Ok
+t7 500 500 10,10,10,10 400,400,400,400,400,400,400,400
+#One corner with InnerRadii< 0 Status: Not okay
+t8 800 600 50 50 50 50 100 100 100 20 100 100 300 300
+#1px border Status : Ok
+t9 400 300 1,1,1,1 100,100,100,100,100,100,100,100
+#zero rectangle Status : Just escapes 
+t10 0 0 50,50,50,50 100,100,100,20,100,100,300,300
+#straight line-vertical Status : Just escapes
+t11 0 500 50,50,50,50 100,100,100,20,100,100,300,300
+#straight line-horizontal Status : Just escapes
+t12 500 0 50,50,50,50 100,100,100,20,100,100,300,300
+#1px border variation Status : Ok
+t13 500 500 1,10,1,10 200,200,200,200,200,200,200,200
+#All corner Inner radii 0
+t14 800 600 100,100,100,100 100,100,100,100,100,100,100,100
+#All corner InnerRadii <0
+t15 800 600 100,100,100,100 50,50,50,50,50,50,50,50
+#
