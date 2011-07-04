@@ -313,11 +313,6 @@ class Rectangle:
         height = self.height
         delta = self.delta
         
-        #Additional parameter to get the right length
-        #while using EllipseE
-        if self.borderRadii[corner][1] > self.borderRadii[corner][0]: shape = 1
-        else: shape = 0        
-        
         ctx.save()
         
         #dir = -1  = >   CW
@@ -344,7 +339,12 @@ class Rectangle:
         iCurveDims = self.innerRadii[corner]
         curveDims = [(oCurveDims[0] + iCurveDims[0])/2, 
                      (oCurveDims[1] + iCurveDims[1])/2]
-    
+
+        #Additional parameter to get the right length
+        #while using EllipseE
+        if curveDims[1] > curveDims[0]: shape = 1
+        else: shape = 0  
+            
         # start represents angle in  [0, pi/2]
         combinedSize = self.borderSizes[(corner-1)%4] + self.borderSizes[corner]
         start = self.borderSizes[corner]/combinedSize * pi/2
