@@ -6,14 +6,14 @@ import sys
 #Example : $ python generateHTML.py TESTCASES mine.html
 #If not given the arguments asked through prompt
 #Testcases File contains n lines of the following format
-#filename width height borderSizesx4 borderRadiix4  	
-#Eg : border 800 600 50 50 50 50 100 100 100 100
+#filename width height borderSizesx4 borderRadiix8  	
+#Eg : border 800 600 50,50,50,50 100,100,100,100,100,100,100,100
 #filename is ignored by this program but must not be null
 
 def bodyBlock(info):
 	infoT = tuple([int(m) for m in info])
 	block = """
-	<div style="width:%dpx;height:%dpx;border-style:dashed;border-width:%dpx %dpx %dpx %dpx;border-radius:%dpx %dpx %dpx %dpx;">
+	<div style="width:%dpx;height:%dpx;border-style:dashed;border-width:%dpx %dpx %dpx %dpx;border-top-left-radius: %dpx %dpx;border-top-right-radius: %dpx %dpx;border-bottom-right-radius: %dpx %dpx;border-bottom-left-radius: %dpx %dpx;">
 		&nbsp;
 	</div>""" % infoT
 	return block
@@ -43,6 +43,9 @@ if __name__=='__main__':
 	body = "<body>"
 	count = 0	
 	for line in f.readlines():
+		if '#' in line:
+			continue
+		line = line.strip('\r\n').replace(',',' ')
 		info = line.split()[1:]
 		body += bodyBlock(info)
 		count += 1

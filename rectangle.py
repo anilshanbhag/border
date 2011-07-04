@@ -1,13 +1,10 @@
 #!/usr/bin/python
 #GSoC Logic Implementation
 from math import *
-from constants import *
 import cairo 
 import sys
 
-
-# Make only draw methods public
-# rest private ?? 
+from constants import *
 
 class Rectangle:
     def __init__(self,inp):
@@ -31,8 +28,9 @@ class Rectangle:
     def parse(self,inp):
         """
         Input from file :
-        Each line in file must be in following format 
+        Each line in file must be in following format
         filename width height borderSizesx4 borderRadiix8
+        Use ',' or ' ' for seperating entries
         Eg : border 800 600 50 50 50 50 100 100 100 100 100 100 100 100
         Comment lines start with #
         """
@@ -58,6 +56,8 @@ class Rectangle:
                 self.innerRadii[i][1] = max(self.borderRadii[i][1] - self.borderSizes[(i-1)%4],0)
 
     def normalize(self):
+        """Rationalize some input cases like when sum of 
+        borderRadii along a side exceed sideLength """
         borderRadii = self.borderRadii
         borderLengths = self.borderLengths
         for i in range(0,4):
@@ -68,7 +68,8 @@ class Rectangle:
          
     def draw(self):
         """Draws the entire rectangle""" 
-        
+        #If width or height zero cairo
+        #initialization fails 
         if not (self.width and self.height):
             return
         
@@ -78,13 +79,13 @@ class Rectangle:
         
         self.ctx.set_source_rgb (0.0, 1.0, 0.0)
         self.drawDashedSide(R)
-        
+
+        self.ctx.set_source_rgb (0.0, 0.0, 1.0)
+        self.drawDashedSide(B)        
+
         self.ctx.set_source_rgb (1.0, 1.0, 0.0)
         self.drawDashedSide(L)
         
-        self.ctx.set_source_rgb (0.0, 0.0, 1.0)
-        self.drawDashedSide(B)
-    
         #Writing out the surface to png file
         self.surface.write_to_png (self.outputFile + '.png') 
 
@@ -187,11 +188,11 @@ class Rectangle:
         # b is the other radius 
         b = (self.borderRadii[cornerIndex][sideIndex%2] + self.innerRadii[cornerIndex][sideIndex%2])/2
         
+        #If a or b==0 then it is treated as solid corner
         if not (a and b):
             return 0
         
         borderSizes = self.borderSizes
-        combinedSize = borderSizes[sideIndex] + borderSizes[(sideIndex-1)%4]
        
         # t is the demarcating angle 
         
@@ -210,27 +211,36 @@ class Rectangle:
         # Then all points on ellipse are of the from (R*cosT , r*sinT)    
         # Also we have y = x*tan(t)
         # Using appropriate reference frames we get : 
+        
         if a >= b:
-            T = atan(a/b * tan(t))    
+            T = pi/2 - atan(a/b * tan(t))    
             k = 1 - (b/a)**2
-            return a * self.EllipseE(k,T, 0.0)
+            return a * self.EllipseE(k,pi/2, T)
         else:
-            T = atan(b/(a * tan(t)))
+            #T = atan(b/(a * tan(t)))
+            T = atan(a/b * tan(t))
             k = 1 - (a/b)**2
-            return b * self.EllipseE(k, pi/2, T)    
+            return b * self.EllipseE(k, T, 0.0)    
 
-    def EllipseE(self,k, ph2, ph1):
+    def EllipseE(self,k, ph2, ph1, shape = 1):
         """
         Ellipse(k,ph1,ph2) : Computes the elliptic integral second kind 
-        Integral from ph1 to ph2 of sqrt (1-k*sinSquare(phi))
+        Integral from ph1 to ph2 of sqrt (1-k*sinSquare(phi)) 
+        OR sqrt (1-k*cosSquare(phi)) decided by shape
         k is m**2 where m is eccentricity
         Uses Simpson's 3/8 rule : gives result correctly approxiamted to one decimal place 
         Furthur Reading :http://en.wikipedia.org/wiki/Simpson's_rule
         """
-        def func(x, t):
+        def func1(x, t):
             return sqrt(1-x*sin(t)*sin(t))
-        return abs(ph2-ph1)/8*(func(k, ph1) + 3*func(k, (2*ph1 + ph2)/3) + \
-                               3*func(k, (ph1 + 2*ph2)/3) + func(k, ph2))
+        def func2(x, t):
+            return sqrt(1-x*cos(t)*cos(t))            
+        if shape:
+            return abs(ph2-ph1)/8*(func1(k, ph1) + 3*func1(k, (2*ph1 + ph2)/3) + \
+                                   3*func1(k, (ph1 + 2*ph2)/3) + func1(k, ph2))
+        else:
+            return abs(ph2-ph1)/8*(func2(k, ph1) + 3*func2(k, (2*ph1 + ph2)/3) + \
+                                   3*func2(k, (ph1 + 2*ph2)/3) + func2(k, ph2))
 
     def drawStraightSection(self,sideIndex, dashes, offset):    
         """ Draws the straight section of given side """
@@ -303,6 +313,13 @@ class Rectangle:
         height = self.height
         delta = self.delta
         
+        #Additional parameter to get the right length
+        #while using EllipseE
+        if self.borderRadii[corner][1] > self.borderRadii[corner][0]: shape = 1
+        else: shape = 0        
+        
+        ctx.save()
+        
         #dir = -1  = >   CW
         #dir = 1  = >   CCW 
     
@@ -317,7 +334,6 @@ class Rectangle:
             cornerOffsetX, cornerOffsetY = self.borderRadii[3][0], self.height - self.borderRadii[3][1]
     
         # Save the state of canvas
-        ctx.save()
         ctx.translate(cornerOffsetX/width, cornerOffsetY/height) # Move to corner center
         ctx.transform(cairo.Matrix(1, 0, 0, -1, 0, 0)) # Flip Y Axis
     
@@ -380,7 +396,7 @@ class Rectangle:
         # First try to draw half a dash 
         while curlen<dash/2:
             current += dir*delta
-            curlen += R * self.EllipseE(k, current, current - dir*delta)
+            curlen = R * self.EllipseE(k, current, previous, shape)
 
         # We wish to check if current >   endAngle while moving CCW 
         # and current < endAngle while moving CW
@@ -431,14 +447,15 @@ class Rectangle:
         curlen = 0
     
         if flag:
+            ctx.restore()
             return
         
         # If we reach this point it means we havent reached endAngle
-        # Now alternatively draw the gap , dash pattern  
+        # Now alternatively draw the gap , dash pattern
         while True:
             while curlen<gap:
                 current += dir*delta
-                curlen += R * self.EllipseE(k, current, current - dir*delta)
+                curlen = R * self.EllipseE(k, current, previous, shape)
         
             previous = current
             
@@ -462,7 +479,7 @@ class Rectangle:
                 break    
             while curlen<dash:
                 current += dir*delta
-                curlen += R * self.EllipseE(k, current, current-dir*delta)
+                curlen = R * self.EllipseE(k, current, previous, shape)
         
             if dir*current > dir*endAngle:
                 current = endAngle
@@ -514,6 +531,9 @@ class Rectangle:
                       self.borderRadii[corner][1]/self.height)
         ctx = self.ctx
         
+        ctx.save()
+        
+        #Check if borderRadii are all > 0
         if not all(borderRadii):
             offsetX,offsetY = 0.0,0.0
             if corner in [TR,BR]:
@@ -525,14 +545,16 @@ class Rectangle:
             ctx.fill()
         
         else:
-                        
+            #The ratio to be used for the control points
+            #of bezier curve
+            #Refer rounded rectangle in gfxContext.cpp            
             alpha = 0.55191497
             
-            if corner == TL: 
+            if corner == TL:
                 cornerX, cornerY = borderRadii[0], borderRadii[1]
-            elif corner == TR: 
+            elif corner == TR:
                 cornerX, cornerY = 1.0 - borderRadii[0], borderRadii[1]
-            elif corner == BR: 
+            elif corner == BR:
                 cornerX, cornerY = 1.0 - borderRadii[0], 1.0 - borderRadii[1]
             elif corner == BL: 
                 cornerX, cornerY = borderRadii[0], 1.0 - borderRadii[1]            
@@ -543,12 +565,11 @@ class Rectangle:
             p2 = {}
             p3 = {}
 
-            ctx.save()
             ctx.translate(cornerX, cornerY) # Move to corner center
             cornerMults = ((-1,-1),(1,-1),(1,1),(-1,1))
             
             cornerMult = cornerMults[corner]
-            #cornerMult = (1,1)
+
             p0[0] = cornerMult[0] * borderRadii[0]
             p0[1] = 0.0
 
@@ -561,12 +582,31 @@ class Rectangle:
             p2[0] = p0[0] * alpha
             p2[1] = p3[1]
             
-            ctx.move_to(0.0,0.0)
-            ctx.line_to(p0[0],p0[1])
-            ctx.curve_to(p1[0],p1[1],p2[0],p2[1],p3[0],p3[1])
+            ctx.move_to(0.0, 0.0)
+            ctx.line_to(p0[0], p0[1])
+            ctx.curve_to(p1[0], p1[1], p2[0], p2[1], p3[0], p3[1])
             ctx.close_path()
             ctx.fill()
-            ctx.restore()
+
+            
+            innerRadii = self.innerRadii[corner]
+            #If only one innerRadii < 0 
+            #fill in the left over rectangular space
+            if not innerRadii[0]==innerRadii[1]==0:
+                if innerRadii[0] > 0:
+                    side = corner if corner%2 == 0 else (corner - 1)%4
+                    ctx.rectangle(0.0, 0.0,cornerMult[0] * borderRadii[0],
+                        -cornerMult[1] * (self.borderSizes[side]/self.height - borderRadii[1]))
+                    ctx.fill()
+                        
+                if innerRadii[1] > 0:    
+                    side = corner if corner%2 == 1 else (corner-1)%4
+                    ctx.rectangle(0.0, 0.0,
+                        -cornerMult[0] * (self.borderSizes[side]/self.width - borderRadii[0]) ,
+                        cornerMult[1] * borderRadii[1])
+                    ctx.fill()
+                
+        ctx.restore()                
     
     def writeSurface(self):
         """Write out the surface to png file"""
@@ -574,11 +614,6 @@ class Rectangle:
             self.surface.write_to_png (self.outputFile + '.png') 
         except:
             "Init parameters first"
-
-class Point:
-    def __init__(x=0,y=0):
-        self.x = x
-        self.y = y
         
 if __name__ == '__main__':
     
@@ -597,9 +632,10 @@ if __name__ == '__main__':
         if '#' in inp:
             continue
         else:
-            rectangle = Rectangle(inp)
-            rectangle.draw()
-            #except:
-            #    print 'Bad Formatting in ',inp
-            #    continue
+            try:
+		        rectangle = Rectangle(inp)
+		        rectangle.draw()
+            except:
+                print 'Bad Formatting in ',inp
+                continue
 
