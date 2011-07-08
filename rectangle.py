@@ -576,25 +576,33 @@ class Rectangle:
             ctx.move_to(oCurve[0] * cos(endAngle)/width, oCurve[1] * sin(endAngle)/height)
         
         if corner%2 == 0:
-            cornerX = min(oCurve[0] - borderSizes[(corner-1)%4],0) * cornerMult[0]
-            cornerY = min(oCurve[1] - borderSizes[corner],0) * cornerMult[1]
+            cornerX = (oCurve[0] - borderSizes[(corner-1)%4]) * cornerMult[0]
+            cornerY = (oCurve[1] - borderSizes[corner]) * cornerMult[1]
             if corner == side:
-                pX = cornerX
+                pX = min(oCurve[0] - borderSizes[(corner-1)%4],0) * cornerMult[0]
                 pY = oCurve[1] * cornerMult[1]
             else:
                 pX = oCurve[0] * cornerMult[0]
-                pY = cornerY
+                pY = min(oCurve[1] - borderSizes[corner],0) * cornerMult[1]
         else:
-            cornerX = min(oCurve[0] - borderSizes[corner],0) * cornerMult[0]
-            cornerY = min(oCurve[1] - borderSizes[(corner-1)%4],0) * cornerMult[1]
+            cornerX = (oCurve[0] - borderSizes[corner]) * cornerMult[0]
+            cornerY = (oCurve[1] - borderSizes[(corner-1)%4]) * cornerMult[1]
             if corner == side:
                 pX = oCurve[0] * cornerMult[0]
-                pY = cornerY
+                pY = min(oCurve[1] - borderSizes[(corner-1)%4],0) * cornerMult[1]
             else:
-                pX = cornerX
+                pX = min(oCurve[0] - borderSizes[corner],0) * cornerMult[0]
                 pY = oCurve[1] * cornerMult[1]
         
+        if side%2 == 0:
+        	qX = cornerX - self.innerRadii[corner][0] * cornerMult[0] 
+        	qY = cornerY
+        else:	
+        	qX = cornerX
+        	qY = cornerY - self.innerRadii[corner][1] * cornerMult[1]
+        	
         ctx.line_to(pX / width, pY / height)
+        ctx.line_to(qX / width, qY / height)
         ctx.line_to(cornerX / width, cornerY / height)    
         ctx.close_path()
         ctx.fill()            
