@@ -63,11 +63,18 @@ class Rectangle:
         borderRadii = self.borderRadii
         borderLengths = self.borderLengths
         for i in range(0,4):
-            if borderRadii[i][i%2] + borderRadii[(i+1)%4][i%2] > borderLengths[i]:
-                ratio = borderLengths[i]/(borderRadii[i][i%2] + borderRadii[(i+1)%4][i%2])
+            pt1 = borderRadii[(i+1)%4][i%2] > self.borderSizes[(i+1)%4]
+            pt2 = borderRadii[i][i%2] > self.borderSizes[(i-1)%4]
+            if pt1 and pt2 :
+                ratio = borderLengths[i] / (borderRadii[(i+1)%4][i%2] + borderRadii[i][i%2])  
+            elif (not pt1) and pt2 :
+                ratio = (borderLengths[i] - self.borderSizes[(i+1)%4]) / borderRadii[i][i%2]
+            elif (not pt2) and pt1:
+                ratio = (borderLengths[i] - self.borderSizes[(i-1)%4]) / borderRadii[(i+1)%4][i%2]
+            if ratio < 1:
                 borderRadii[i] = [m*ratio for m in borderRadii[i]]
-                borderRadii[(i+1)%4] = [m*ratio for m in borderRadii[(i+1)%4]]
-                
+                borderRadii[(i+1)%4] = [m*ratio for m in borderRadii[(i+1)%4]]    
+    
     def draw(self):
         """Draws the entire rectangle""" 
         
@@ -315,9 +322,9 @@ class Rectangle:
 
     def drawCorner(self,corner, dash, gap, dir):
         """Draws section of corner in given direction (dir) """
-		
-		# Entering this method means none of the innerRadii are <0
-		# for the corner
+        
+        # Entering this method means none of the innerRadii are <0
+        # for the corner
         ctx = self.ctx
         width = self.width
         height = self.height
@@ -510,16 +517,16 @@ class Rectangle:
     
     def drawSolidCorner(self,corner,side,dir):
         """Fills the corner section : FillStyle - solid"""
-		
-		#This method is to draw case C and case D of section 5.4 
-		#at http://www.w3.org/TR/css3-background/
-		#While working in a corner with solid corner there are
-		#2 main points [which may or may not coincide]
-		# The point defined by ellipse center has coordinates
-		# centerX,centerY
-		# The point defined by intersection of corner edges is
-		# cornerX,cornerY
-		
+        
+        #This method is to draw case C and case D of section 5.4 
+        #at http://www.w3.org/TR/css3-background/
+        #While working in a corner with solid corner there are
+        #2 main points [which may or may not coincide]
+        # The point defined by ellipse center has coordinates
+        # centerX,centerY
+        # The point defined by intersection of corner edges is
+        # cornerX,cornerY
+        
         ctx = self.ctx
         ctx.save()
 
@@ -595,12 +602,12 @@ class Rectangle:
                 pY = oCurve[1] * cornerMult[1]
         
         if side%2 == 0:
-        	qX = cornerX - self.innerRadii[corner][0] * cornerMult[0] 
-        	qY = cornerY
-        else:	
-        	qX = cornerX
-        	qY = cornerY - self.innerRadii[corner][1] * cornerMult[1]
-        	
+            qX = cornerX - self.innerRadii[corner][0] * cornerMult[0] 
+            qY = cornerY
+        else:    
+            qX = cornerX
+            qY = cornerY - self.innerRadii[corner][1] * cornerMult[1]
+            
         ctx.line_to(pX / width, pY / height)
         ctx.line_to(qX / width, qY / height)
         ctx.line_to(cornerX / width, cornerY / height)    
@@ -630,9 +637,8 @@ if __name__ == '__main__':
         if '#' in inp:
             continue
         else:
-            try:
-            	rectangle = Rectangle(inp)
-            	rectangle.draw()
-            except:
-                print 'Bad Formatting in ',inp
-                continue
+            rectangle = Rectangle(inp)
+            rectangle.draw()
+            #except:
+            #    print 'Bad Formatting in ',inp
+            #    continue
