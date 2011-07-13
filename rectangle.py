@@ -71,6 +71,8 @@ class Rectangle:
                 ratio = (borderLengths[i] - self.borderSizes[(i+1)%4]) / borderRadii[i][i%2]
             elif (not pt2) and pt1:
                 ratio = (borderLengths[i] - self.borderSizes[(i-1)%4]) / borderRadii[(i+1)%4][i%2]
+            else :
+                ratio = 2
             if ratio < 1:
                 borderRadii[i] = [m*ratio for m in borderRadii[i]]
                 borderRadii[(i+1)%4] = [m*ratio for m in borderRadii[(i+1)%4]]    
@@ -226,13 +228,13 @@ class Rectangle:
         # Using appropriate reference frames we get : 
         
         if a >= b:
-            T = pi/2 - atan(a/b * tan(t))    
+            T = pi/2 - self.paramToAbs(t, a, b)
             k = 1 - (b/a)**2
-            return a * self.EllipseE(k,pi/2, T)
+            return a * self.EllipseE(k, pi/2, T)
         else:
-            T = atan(a/b * tan(t))
+            T = self.paramToAbs(t, a, b)
             k = 1 - (a/b)**2
-            return b * self.EllipseE(k, T, 0.0)    
+            return b * self.EllipseE(k, T, 0.0)
 
     def EllipseE(self,k, ph2, ph1, shape = 1):
         """
@@ -320,6 +322,21 @@ class Rectangle:
         """
         return atan(b*tan(tp)/a)
 
+    def oIntersect(self, tp, ia, ib, oa, ob ):
+        if sin(tp) == 0 or cos(tp) == 0:
+            return tp
+        x = ib*ob / sin(tp)
+        y = ia*oa / cos(tp)
+        z = ia**2 - ib**2
+        sr = sqrt(x**2 + y**2)
+        C = acos(z / sr)
+        A = acos(y / sr)
+        if C > 0:
+            B = C - A
+        else:
+            B = - C - A
+        return B
+
     def drawCorner(self,corner, dash, gap, dir):
         """Draws section of corner in given direction (dir) """
         
@@ -379,11 +396,24 @@ class Rectangle:
             endAngle -= pi/2
             calcAngle = endAngle
         
-        currentO = calcAngle + self.absToParam(start, oCurve[(corner + 1)%2], oCurve[corner%2])
-        previousO = currentO
+        #TODO Changed here
+        #currentO = calcAngle + self.absToParam(start, oCurve[(corner + 1)%2], oCurve[corner%2])
+        #currentO = calcAngle + self.paramToAbs(start, oCurve[(corner + 1)%2], oCurve[corner%2])
+        #previousO = currentO
 
-        currentI = calcAngle + self.absToParam(start, iCurve[(corner + 1)%2], iCurve[corner%2])
+        #currentI = calcAngle + self.absToParam(start, iCurve[(corner + 1)%2], iCurve[corner%2])
+        currentI = calcAngle + self.paramToAbs(start, iCurve[(corner + 1)%2], iCurve[corner%2])
         previousI = currentI
+
+        #currentO = self.absToParam(
+        #                self.paramToAbs(currentI - calcAngle, 
+        #                                iCurve[(corner + 1)%2], iCurve[corner%2]), 
+        #                oCurve[(corner + 1)%2], oCurve[corner%2]
+        #            ) + calcAngle
+        currentO = calcAngle + self.oIntersect(currentI - calcAngle,
+                                   iCurve[(corner + 1)%2], iCurve[corner%2],
+                                   oCurve[(corner + 1)%2], oCurve[corner%2])        
+        previousO = currentO
     
         # R is semi major axis , r is semi minor axis
         # k is square of eccentricity
@@ -421,12 +451,11 @@ class Rectangle:
         
         # here we convert currentI into absolute angle and then convert 
         # it back into parameteric angle currentO
-        currentO = self.absToParam(
-                        self.paramToAbs(currentI - calcAngle, 
-                                        iCurve[(corner + 1)%2], iCurve[corner%2]), 
-                        oCurve[(corner + 1)%2], oCurve[corner%2]
-                    ) + calcAngle
         
+        currentO = calcAngle + self.oIntersect(currentI - calcAngle,
+                                   iCurve[(corner + 1)%2], iCurve[corner%2],
+                                   oCurve[(corner + 1)%2], oCurve[corner%2])
+                                   
         #Consider dividing the curves into 30 sections each.
         stepO = (currentO - previousO)/30
         stepI = (currentI - previousI)/30
@@ -462,12 +491,10 @@ class Rectangle:
                 currentI += dir*delta
                 curlen = R * self.EllipseE(k, currentI, previousI, shape)
             
-            currentO = self.absToParam(
-                            self.paramToAbs(currentI - calcAngle, 
-                                            iCurve[(corner + 1)%2], iCurve[corner%2]), 
-                            oCurve[(corner + 1)%2], oCurve[corner%2]
-                        ) + calcAngle
-        
+            currentO = calcAngle + self.oIntersect(currentI - calcAngle,
+                                       iCurve[(corner + 1)%2], iCurve[corner%2],
+                                       oCurve[(corner + 1)%2], oCurve[corner%2])
+            
             previousO = currentO
             previousI = currentI
             curlen = 0
@@ -482,13 +509,10 @@ class Rectangle:
             if dir*currentI >= dir*endAngle:
                 currentI = endAngle
                 flag = 1
-                
-            currentO = self.absToParam(
-                            self.paramToAbs(currentI - calcAngle, 
-                                            iCurve[(corner + 1)%2], iCurve[corner%2]), 
-                            oCurve[(corner + 1)%2], oCurve[corner%2]
-                        ) + calcAngle
             
+            currentO = calcAngle + self.oIntersect(currentI - calcAngle,
+                                       iCurve[(corner + 1)%2], iCurve[corner%2],
+                                       oCurve[(corner + 1)%2], oCurve[corner%2])
             stepO = (currentO - previousO)/30
             stepI = (currentI - previousI)/30
         
@@ -570,7 +594,7 @@ class Rectangle:
         
         #In case borderRadii doesnt exist
         try:
-            startAngle = calcAngle + self.absToParam(start, oCurve[(corner + 1)%2], oCurve[corner%2])
+            startAngle = calcAngle + self.paramToAbs(start, oCurve[(corner + 1)%2], oCurve[corner%2])
             
             ctx.move_to(oCurve[0] * cos(startAngle)/width, oCurve[1] * sin(startAngle)/height)
             
@@ -637,8 +661,9 @@ if __name__ == '__main__':
         if '#' in inp:
             continue
         else:
-            rectangle = Rectangle(inp)
-            rectangle.draw()
-            #except:
-            #    print 'Bad Formatting in ',inp
-            #    continue
+        	try:
+            	rectangle = Rectangle(inp)
+            	rectangle.draw()
+            except:
+                print 'Bad Formatting in ',inp
+                continue

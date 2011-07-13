@@ -1,59 +1,59 @@
-#Use py#thon syn#tax highligh#ting #to differen#tia#te commen#ts
-#Use #the following syn#tax
-# ou#tpu#tFile wid#th heigh#t borderWid#thsx4 borderRadiix8
-#Use ',' or ' ' for sepera#ting #the values 
+#Use python syntax highlighting to differentiate comments
+#Use the following syntax
+# outputFile width height borderWidthsx4 borderRadiix8
+#Use ',' or ' ' for seperating the values 
 #Simple 
-#t1 800 600 50 50 50 50 100 100 100 100 100 100 100 100
-#thin border 
-#t2 800 600 50 50 5 50 100 100 100 100 100 100 100 100
-#Wid#th = 0 
-#t3 800 600 50 50 0 50 100 100 100 100 100 100 100 100
+t1 800 600 50 50 50 50 100 100 100 100 100 100 100 100
+# thin border 
+t2 800 600 50 50 5 50 100 100 100 100 100 100 100 100
+#Width = 0 
+t3 800 600 50 50 0 50 100 100 100 100 100 100 100 100
 #Ellipse 
-#t4 800 600 50 50 50 50 400 300 400 300 400 300 400 300
-#Normal case - #thin border - 
-#t5 800 600 5 5 5 5 300 300 100 100 100 100 300 300
+t4 800 600 50 50 50 50 400 300 400 300 400 300 400 300
+#Normal case - thin border - 
+t5 800 600 5 5 5 5 300 300 100 100 100 100 300 300
 #No border-radius - 
-#t6 800 600 20 20 20 20 0 0 100 100 100 100 300 300
+t6 800 600 20 20 20 20 0 0 100 100 100 100 300 300
 #border radius normalized 
-#t7 500 500 10,10,10,10 400,400,400,400,400,400,400,400
-#One corner wi#th InnerRadii< 0 
-#t8 800 600 50,50,50,50 100,100,100,20,100,100,300,300
+t7 500 500 10,10,10,10 400,400,400,400,400,400,400,400
+#One corner with InnerRadii< 0 
+t8 800 600 50,50,50,50 100,100,100,20,100,100,300,300
 #1px border 
-#t9 400 300 1,1,1,1 100,100,100,100,100,100,100,100
-#zero rec#tangle S#ta#tus : Jus#t escapes 
-#t10 0 0 50,50,50,50 100,100,100,20,100,100,300,300
-#s#traigh#t line-ver#tical S#ta#tus : Jus#t escapes
-#t11 0 500 50,50,50,50 100,100,100,20,100,100,300,300
-#s#traigh#t line-horizon#tal S#ta#tus : Jus#t escapes
-#t12 500 0 50,50,50,50 100,100,100,20,100,100,300,300
-#1px border varia#tion 
-#t13 500 500 1,10,1,10 200,200,200,200,200,200,200,200
+t9 400 300 1,1,1,1 100,100,100,100,100,100,100,100
+#zero rectangle Status : Just escapes 
+t10 0 0 50,50,50,50 100,100,100,20,100,100,300,300
+#straight line-vertical Status : Just escapes
+t11 0 500 50,50,50,50 100,100,100,20,100,100,300,300
+#straight line-horizontal Status : Just escapes
+t12 500 0 50,50,50,50 100,100,100,20,100,100,300,300
+#1px border variation 
+t13 500 500 1,10,1,10 200,200,200,200,200,200,200,200
 #All corner Inner radii 0 
-#t14 800 600 100,100,100,100 100,100,100,100,100,100,100,100
+t14 800 600 100,100,100,100 100,100,100,100,100,100,100,100
 #All corner InnerRadii <0 
-#t15 800 600 100,100,100,100 50,50,50,50,50,50,50,50
-#Solid Circle 
-#t16 800 600 300,400,300,400 400,300,400,300,400,300,400,300
-#t17 - #t20 All involve one innerRadii = 0
-#innerRadius along y axis = 0 
-#t17 800 600 50,50,50,50 20,100,20,100,20,100,20,100
-#innerRadius along x axis <0 
-#t18 800 600 50,50,50,50 100,20,100,20,100,20,100,20
-#skewed case of #t17 
-#t19 800 600 30,40,40,50 20,100,20,100,20,100,20,100
-#skewed case of #t18
-#t20 800 600 30,40,40,50 100,20,100,20,100,20,100,20
-#1px wid#th rec#tangle
-#t21 800 1 30,40,50,60 100,100,100,100,100,100,100,100
-#1px by 1px rec#tangle
-#t22 1 1 30,40,50,60 100,100,100,100,100,100,100,100 
-#tes#tcases 23 - 25 regarding borderRadii > 0 bu#t wi#th sharp curves
-#t23 800 600 10,10,10,10 200,50,200,50,200,50,200,50
-#t24 800 600 10,10,10,10 50,200,50,200,50,200,50,200
-#t25 800 600 10,10,10,10 100,20,100,20,100,20,100,20
-#No border radii
-#t26 800 600 10,10,10,10 0,0,0,0,0,0,0,0
+t15 800 600 100,100,100,100 50,50,50,50,50,50,50,50
+# Solid Circle 
+t16 800 600 300,400,300,400 400,300,400,300,400,300,400,300
+# t17 - t20 All involve one innerRadii = 0
+# innerRadius along y axis = 0 
+t17 800 600 50,50,50,50 20,100,20,100,20,100,20,100
+# innerRadius along x axis <0 
+t18 800 600 50,50,50,50 100,20,100,20,100,20,100,20
+# skewed case of t17 
+t19 800 600 30,40,40,50 20,100,20,100,20,100,20,100
+# skewed case of t18
+t20 800 600 30,40,40,50 100,20,100,20,100,20,100,20
+# 1px width rectangle
+t21 800 1 30,40,50,60 100,100,100,100,100,100,100,100
+# 1px by 1px rectangle
+t22 1 1 30,40,50,60 100,100,100,100,100,100,100,100 
+# testcases 23 - 25 regarding borderRadii > 0 but with sharp curves
+t23 800 600 10,10,10,10 200,50,200,50,200,50,200,50
+t24 800 600 10,10,10,10 50,200,50,200,50,200,50,200
+t25 800 600 10,10,10,10 100,20,100,20,100,20,100,20
+# No border radii
+t26 800 600 10,10,10,10 0,0,0,0,0,0,0,0
 #
-#t27 800 600 50,20,50,20 90,110,90,110,90,110,90,110
-#the odd case normalize fails normally : h#t#tp://goo.gl/so6U#t
+t27 800 600 50,20,50,20 90,110,90,110,90,110,90,110
+# the odd case normalize fails normally : http://goo.gl/so6Ut
 t28 800 300 20,20,20,20 0,0,400,400,0,0,400,400
