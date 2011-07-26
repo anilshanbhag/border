@@ -38,6 +38,11 @@
  *
  * ***** END LICENSE BLOCK ***** */
 
+
+/*
+ * Work in Progress
+ */
+
 #include "nsStyleConsts.h"
 #include "nsIFrame.h"
 #include "nsPoint.h"
