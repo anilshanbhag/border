@@ -40,7 +40,7 @@
 
 
 /*
- * Work in Progress
+ *Work in Progress
  */
 
 #include "nsStyleConsts.h"

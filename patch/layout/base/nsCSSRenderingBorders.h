@@ -38,7 +38,7 @@
  * ***** END LICENSE BLOCK ***** */
 
 /*
- * Work in Progress
+ *Work in Progress
  */
 
 #ifndef NS_CSS_RENDERING_BORDERS_H
