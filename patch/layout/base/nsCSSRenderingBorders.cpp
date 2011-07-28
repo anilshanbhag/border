@@ -38,11 +38,6 @@
  *
  * ***** END LICENSE BLOCK ***** */
 
-
-/*
- *Work in Progress
- */
-
 #include "nsStyleConsts.h"
 #include "nsIFrame.h"
 #include "nsPoint.h"
@@ -154,8 +149,6 @@ AllCornersZeroSize(const gfxCornerSizes& corners) {
  * Start addition
  */
 
-// TODO Check if abs , sin , cos , atan ,vars proper
-
 static gfxFloat
 func1(gfxFloat x,
       gfxFloat t)
@@ -189,14 +182,8 @@ EllipseE(gfxFloat k,
   }
 }
 
-static gfxFloat
-AbsToParam(gfxFloat& ta,
-           gfxFloat& a,
-           gfxFloat& b)
-{
-  return atan(a*tan(ta)/b);
-}
-
+  //TODO add the checking condn when paramToAbs(start, oCurve[(corner + 1)%2], oCurve[corner%2]) raises error
+  // a == 0
 static gfxFloat
 ParamToAbs(gfxFloat& tp,
            gfxFloat& a,
@@ -206,11 +193,11 @@ ParamToAbs(gfxFloat& tp,
 }
 
 static gfxFloat
-OIntersect(gfxFloat& tp,
-           gfxFloat& ia,
-           gfxFloat& ib,
-           gfxFloat& oa,
-           gfxFloat& ob)
+OIntersect(gfxFloat tp,
+           gfxFloat ia,
+           gfxFloat ib,
+           gfxFloat oa,
+           gfxFloat ob)
 {
   if(sin(tp) == 0 || cos(tp) == 0)
     return tp;
@@ -1213,7 +1200,7 @@ nsCSSBorderRenderer::DrawDashedSide(mozilla::css::Side aSide)
 
   //mContext->SetDash(dash, 2, 0.0);
   //double(offset)
-  mContext->SetDash(dash, 2, 100.0);
+  mContext->SetDash(dash, 2, offset);
 
   gfxPoint start = mOuterRect.CCWCorner(aSide);
   gfxPoint end = mOuterRect.CWCorner(aSide);
@@ -1336,15 +1323,24 @@ nsCSSBorderRenderer::ComputeCurvedLength(mozilla::css::Side side,
 }
 
 void
-nsCSSBorderRenderer::DrawCorner(mozilla::css:Side aSide,
-                                mozilla::css::Corner aCorner,
+nsCSSBorderRenderer::DrawCorner(mozilla::css::Corner aCorner,
                                 gfxFloat& dash,
-                                gfxFloat& gap)
+                                gfxFloat& gap,
+                                int dir)
 {
   // TODO :: check this dir problem
 
-  gfxPoint corner = mOuterRect.TopLeft() ,
-           shape = 0 , pi = 3.14159;
+  gfxPoint corner = mOuterRect.TopLeft();
+  const gfxFloat pi = 3.14159, delta = 0.1;
+  gfxFloat combinedSize, start, endAngle, calcAngle, r, R, k,
+           iPrevious, iCurrent, oPrevious, oCurrent, curlen, oStep, iStep;
+  bool flag = false;
+  int shape = 0;
+
+  gfxFloat oCurve[2] = { mBorderRadii[aCorner].width,
+                         mBorderRadii[aCorner].height},
+           iCurve[2] = { mInnerRadii[aCorner].width,
+                         mInnerRadii[aCorner].height};
 
   if (aCorner == NS_CORNER_TOP_LEFT) {
     corner.x += mBorderCornerDimensions[C_TL].width;
@@ -1364,15 +1360,10 @@ nsCSSBorderRenderer::DrawCorner(mozilla::css:Side aSide,
   mContext->Translate(corner);
   mContext->Scale(1.0,-1.0);
 
-  gfxFloat oCurve[2] = { mBorderRadii[aCorner].width,
-                         mBorderRadii[aCorner].height},
-           iCurve[2] = { mInnerRadii[aCorner].width,
-                         mInnerRadii[aCorner].height};
-
   if (iCurve[1] > iCurve[0]) shape = 1;
 
-  combinedSize = mBorderSizes[(aCorner - 1)%4] + mBorderSizes[aCorner]
-  start = mBorderSizes[aCorner] * pi/2 ;
+  combinedSize = mBorderWidths[(aCorner - 1)%4] + mBorderWidths[aCorner];
+  start = mBorderWidths[aCorner] * pi/2 ;
 
   endAngle = (2 - aCorner)%4 * pi/2;
   if (endAngle == 0) endAngle = 2*pi ;
@@ -1384,12 +1375,12 @@ nsCSSBorderRenderer::DrawCorner(mozilla::css:Side aSide,
     calcAngle = endAngle;
   }
 
-  iCurrent =  calcAngle + ParamToAbs(start, iCurve[(aCorner + 1)%2], iCurve[corner%2]);
+  iCurrent =  calcAngle + ParamToAbs(start, iCurve[(aCorner + 1)%2], iCurve[aCorner%2]);
   iPrevious = iCurrent;
 
   oCurrent = calcAngle + OIntersect(iCurrent - calcAngle,
                                     iCurve[(aCorner + 1)%2], iCurve[aCorner%2],
-                                    oCurve[(aCorner + 1)%2], oCurve[aCorner%2])
+                                    oCurve[(aCorner + 1)%2], oCurve[aCorner%2]);
   oPrevious = oCurrent;
 
   R = iCurve[0];
@@ -1408,7 +1399,7 @@ nsCSSBorderRenderer::DrawCorner(mozilla::css:Side aSide,
   }
 
   if (dir*iCurrent >= dir*endAngle) {
-    flag = 1; iCurrent = endAngle;
+    flag = true; iCurrent = endAngle;
   }
 
   oCurrent = calcAngle + OIntersect(iCurrent - calcAngle,
@@ -1418,17 +1409,17 @@ nsCSSBorderRenderer::DrawCorner(mozilla::css:Side aSide,
   oStep = (oCurrent - oPrevious)/30;
   iStep = (iCurrent - iPrevious)/30;
 
-  mContext->MoveTo(oCurve[0] * cos(oPrevious), oCurve[1] * sin(oPrevious));
+  mContext->MoveTo(gfxPoint(oCurve[0] * cos(oPrevious), oCurve[1] * sin(oPrevious)));
 
-  for(int x=1;x<31;x++)
-    mContext->LineTo(oCurve[0] * cos(oPrevious + oStep*i),
-                     oCurve[1] * sin(oPrevious + oStep*i));
+  for(int i=1;i<31;i++)
+    mContext->LineTo(gfxPoint(oCurve[0] * cos(oPrevious + oStep*i),
+                     oCurve[1] * sin(oPrevious + oStep*i)));
 
-  mContext->LineTo(iCurve[0] * cos(iCurrent), iCurve[1] * sin(iCurrent));
+  mContext->LineTo(gfxPoint(iCurve[0] * cos(iCurrent), iCurve[1] * sin(iCurrent)));
 
-  for(int x=1;x<31;x++)
-    mContext->LineTo(iCurve[0] * cos(iCurrent - iStep*i),
-                     iCurve[1] * sin(iCurrent - iStep*i));
+  for(int i=1;i<31;i++)
+    mContext->LineTo(gfxPoint(iCurve[0] * cos(iCurrent - iStep*i),
+                     iCurve[1] * sin(iCurrent - iStep*i)));
 
   mContext->ClosePath();
   mContext->Fill();
@@ -1472,17 +1463,17 @@ nsCSSBorderRenderer::DrawCorner(mozilla::css:Side aSide,
     oStep = (oCurrent - oPrevious)/30;
     iStep = (iCurrent - iPrevious)/30;
 
-    mContext->MoveTo(oCurve[0] * cos(oPrevious), oCurve[1] * sin(oPrevious));
+    mContext->MoveTo(gfxPoint(oCurve[0] * cos(oPrevious), oCurve[1] * sin(oPrevious)));
 
-    for(int x=1;x<31;x++)
-      mContext->LineTo(oCurve[0] * cos(oPrevious + oStep*i),
-                       oCurve[1] * sin(oPrevious + oStep*i));
+    for(int i=1;i<31;i++)
+      mContext->LineTo(gfxPoint(oCurve[0] * cos(oPrevious + oStep*i),
+                       oCurve[1] * sin(oPrevious + oStep*i)));
 
-    mContext->LineTo(iCurve[0] * cos(iCurrent), iCurve[1] * sin(iCurrent));
+    mContext->LineTo(gfxPoint(iCurve[0] * cos(iCurrent), iCurve[1] * sin(iCurrent)));
 
-    for(int x=1;x<31;x++)
-      mContext->LineTo(iCurve[0] * cos(iCurrent - iStep*i),
-                       iCurve[1] * sin(iCurrent - iStep*i));
+    for(int i=1;i<31;i++)
+      mContext->LineTo(gfxPoint(iCurve[0] * cos(iCurrent - iStep*i),
+                       iCurve[1] * sin(iCurrent - iStep*i)));
 
     mContext->ClosePath();
     mContext->Fill();
@@ -1498,68 +1489,106 @@ nsCSSBorderRenderer::DrawCorner(mozilla::css:Side aSide,
 }
 
 void
-nsCSSBorderRenderer::DrawSolidCorner(mozilla::css::Side aSide,
-                                     mozilla::css::Corner aCorner)
+nsCSSBorderRenderer::DrawSolidCorner(mozilla::css::Corner aCorner,
+                                     int dir)
 {
 
   gfxFloat borderRadii[2] = {mBorderRadii[aCorner].width ,
                              mBorderRadii[aCorner].height};
-
-  gfxPoint corner = mOuterRect.TopLeft();
+  gfxFloat pi = 3.14159, calcAngle, startAngle;
+  gfxPoint center, corner, p, q;
+  center = mOuterRect.TopLeft();
 
   if (aCorner == NS_CORNER_TOP_LEFT) {
-    corner.x += mBorderCornerDimensions[C_TL].width;
-    corner.y += mBorderCornerDimensions[C_TL].height;
+    center.x += mBorderCornerDimensions[C_TL].width;
+    center.y += mBorderCornerDimensions[C_TL].height;
   } else if (aCorner == NS_CORNER_TOP_RIGHT) {
-    corner.x += mOuterRect.width - mBorderCornerDimensions[C_TR].width;
-    corner.y += mBorderCornerDimensions[C_TR].height;
+    center.x += mOuterRect.width - mBorderCornerDimensions[C_TR].width;
+    center.y += mBorderCornerDimensions[C_TR].height;
   } else if (aCorner == NS_CORNER_BOTTOM_RIGHT) {
-    corner.x += mOuterRect.width - mBorderCornerDimensions[C_BR].width;
-    corner.y += mOuterRect.height - mBorderCornerDimensions[C_BR].height;
+    center.x += mOuterRect.width - mBorderCornerDimensions[C_BR].width;
+    center.y += mOuterRect.height - mBorderCornerDimensions[C_BR].height;
   } else if (aCorner == NS_CORNER_BOTTOM_LEFT) {
-    corner.x += mBorderCornerDimensions[C_BL].width;
-    corner.y += mOuterRect.height - mBorderCornerDimensions[C_BL].height;
+    center.x += mBorderCornerDimensions[C_BL].width;
+    center.y += mOuterRect.height - mBorderCornerDimensions[C_BL].height;
   }
 
   mContext->Save();
   mContext->Translate(corner);
   mContext->Scale(1.0,-1.0);
 
-  const twoFloats cornerMults[4] = { { -1,  1 },
-                                     {  1,  1 },
-                                     {  1, -1 },
-                                     { -1, -1 } };
+  const gfxFloat xCornerMults[4] = { -1, 1, 1, -1 };
+  const gfxFloat yCornerMults[4] = { 1, 1, -1, -1 };
+  gfxFloat cornerMult[2] = { xCornerMults[aCorner], yCornerMults[aCorner] };
 
-  twoFloats cornerMult = cornerMults[aCorner];
-
-  gfxFloat combinedSize = mBorderSizes[(aCorner-1)%4] + mBorderSizes[aCorner],
-           start = self.borderSizes[corner]/combinedSize * pi/2,
-           endAngle = (2-corner)%4 * pi/2;
+  gfxFloat combinedSize = mBorderWidths[(aCorner-1)%4] + mBorderWidths[aCorner],
+           start = mBorderWidths[aCorner]/combinedSize * pi/2,
+           endAngle = (2 - aCorner)%4 * pi/2;
   gfxFloat oCurve[2] = { mBorderRadii[aCorner].width,
-                         mBorderRadii[aCorner].height},
+                         mBorderRadii[aCorner].height};
 
   if (endAngle == 0) endAngle = 2*pi;
 
   if (dir == 1) {
     calcAngle = endAngle - pi/2;
   } else {
-     endAngle -= pi/2;
-     calcAngle = endAngle;
+    endAngle -= pi/2;
+    calcAngle = endAngle;
   }
   //TODO add the checking condn when paramToAbs(start, oCurve[(corner + 1)%2], oCurve[corner%2]) raises error
-  if () {
-    mContext->MoveTo(oCurve[0] * cos(endAngle), oCurve[1] * sin(endAngle));
+  if (oCurve[(aCorner + 1)%2] == 0) {
+    mContext->MoveTo(gfxPoint(oCurve[0] * cos(endAngle), oCurve[1] * sin(endAngle)));
   } else {
-    startAngle = calcAngle + ParamToAbs(start, oCurve[(corner + 1)%2], oCurve[corner%2]);
-    mContext->MoveTo(oCurve[0] * cos(startAngle)/width, oCurve[1] * sin(startAngle)/height);
+    startAngle = calcAngle + ParamToAbs(start, oCurve[(aCorner + 1)%2], oCurve[aCorner%2]);
+    mContext->MoveTo(gfxPoint(oCurve[0] * cos(startAngle), oCurve[1] * sin(startAngle)));
 
-    step = (endAngle - startAngle)/30;
+    gfxFloat step = (endAngle - startAngle)/30;
 
     for (int i=1; i<31; i++){
-        mContext->LineTo(oCurve[0] * cos(startAngle + step*i)/width,
-                         oCurve[1] * sin(startAngle + step*i)/height);
+        mContext->LineTo(gfxPoint(oCurve[0] * cos(startAngle + step*i),
+                         oCurve[1] * sin(startAngle + step*i)));
     }
   }
+
+  int side = (dir == 1)? (aCorner - 1)%4 : aCorner;
+
+  if (aCorner%2 == 0) {
+    corner.x = (oCurve[0] - mBorderWidths[(aCorner-1)%4]) * cornerMult[0] ;
+    corner.y = (oCurve[1] - mBorderWidths[aCorner]) * cornerMult[1] ;
+    if (aCorner == side) {
+        p.x = NS_MIN(oCurve[0] - mBorderWidths[(aCorner-1)%4],0.0) * cornerMult[0];
+        p.y = oCurve[1] * cornerMult[1];
+    } else {
+        p.x = oCurve[0] * cornerMult[0];
+        p.y = NS_MIN(oCurve[1] - mBorderWidths[aCorner],0.0) * cornerMult[1];
+    }
+  } else {
+    corner.x = (oCurve[0] - mBorderWidths[aCorner]) * cornerMult[0];
+    corner.y = (oCurve[1] - mBorderWidths[(aCorner-1)%4]) * cornerMult[1];
+    if (aCorner == side) {
+        p.x = oCurve[0] * cornerMult[0];
+        p.y = NS_MIN(oCurve[1] - mBorderWidths[(aCorner-1)%4],0.0) * cornerMult[1];
+    } else {
+        p.x = NS_MIN(oCurve[0] - mBorderWidths[aCorner],0.0) * cornerMult[0];
+        p.y = oCurve[1] * cornerMult[1];
+    }
+  }
+
+  if (side%2 == 0){
+    q.x = corner.x - mInnerRadii[aCorner].width * cornerMult[0];
+    q.y = corner.y;
+  } else {
+    q.x = corner.x;
+    q.y = corner.y - mInnerRadii[aCorner].height * cornerMult[1];
+  }
+
+  mContext->LineTo(p);
+  mContext->LineTo(q);
+  mContext->LineTo(corner);
+  mContext->ClosePath();
+  mContext->Fill();
+
+  mContext->Restore();
 }
 
 /*
