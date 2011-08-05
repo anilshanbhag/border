@@ -164,18 +164,25 @@ func2(gfxFloat x,
 }
 
 static gfxFloat
+gfxAbs(gfxFloat a)
+{
+  if(a>=0) return a;
+  else return -a;
+}
+
+static gfxFloat
 EllipseE(gfxFloat k,
          gfxFloat ph1,
          gfxFloat ph2,
          bool shape = 1)
 {
   if (shape) {
-    return abs(ph2-ph1)/8 * (func1(k, ph1) +
+    return gfxAbs(ph2-ph1)/8 * (func1(k, ph1) +
                              3*func1(k, (2*ph1 + ph2)/3) +
                              3*func1(k, (ph1 + 2*ph2)/3) +
                              func1(k, ph2));
   } else {
-    return abs(ph2-ph1)/8 * (func2(k, ph1) +
+    return gfxAbs(ph2-ph1)/8 * (func2(k, ph1) +
                              3*func2(k, (2*ph1 + ph2)/3) +
                              3*func2(k, (ph1 + 2*ph2)/3) +
                              func2(k, ph2));
@@ -358,6 +365,18 @@ nsCSSBorderRenderer::MyInnerRadii(gfxCornerSizes *aOuterRadiiRet,
     }
   }
 
+  mBorderCornerDimensions[C_TL].width = NS_MAX(aBorderSizes[NS_SIDE_LEFT], oRadii[C_TL].width);
+  mBorderCornerDimensions[C_TL].height = NS_MAX(aBorderSizes[NS_SIDE_TOP], oRadii[C_TL].height);
+
+  mBorderCornerDimensions[C_TR].width = NS_MAX(aBorderSizes[NS_SIDE_RIGHT], oRadii[C_TR].width);
+  mBorderCornerDimensions[C_TR].height = NS_MAX(aBorderSizes[NS_SIDE_TOP], oRadii[C_TR].height);
+
+  mBorderCornerDimensions[C_BR].width = NS_MAX(aBorderSizes[NS_SIDE_RIGHT], oRadii[C_BR].width);
+  mBorderCornerDimensions[C_BR].height = NS_MAX(aBorderSizes[NS_SIDE_BOTTOM], oRadii[C_BR].height);
+
+  mBorderCornerDimensions[C_BL].width = NS_MAX(aBorderSizes[NS_SIDE_LEFT], oRadii[C_BL].width);
+  mBorderCornerDimensions[C_BL].height = NS_MAX(aBorderSizes[NS_SIDE_BOTTOM], oRadii[C_BL].height);
+
   iRadii[C_TL].width = NS_MAX(0.0, oRadii[C_TL].width - aBorderSizes[NS_SIDE_LEFT]);
   iRadii[C_TL].height = NS_MAX(0.0, oRadii[C_TL].height - aBorderSizes[NS_SIDE_TOP]);
 
@@ -503,17 +522,46 @@ nsCSSBorderRenderer::BorderColorStyleForSolidCorner(PRUint8 aStyle, mozilla::css
 }
 
 void
-nsCSSBorderRenderer::DoCornerSubPath(mozilla::css::Corner aCorner)
+nsCSSBorderRenderer::DoCornerSubPath(mozilla::css::Corner aCorner,int pos = 0)
 {
-  gfxPoint offset(0.0, 0.0);
+  gfxPoint offset = mOuterRect.TopLeft();
 
-  if (aCorner == C_TR || aCorner == C_BR)
-    offset.x = mOuterRect.Width() - mBorderCornerDimensions[aCorner].width;
-  if (aCorner == C_BR || aCorner == C_BL)
-    offset.y = mOuterRect.Height() - mBorderCornerDimensions[aCorner].height;
+  if(!pos){
+    if (aCorner == C_TR || aCorner == C_BR)
+      offset.x += mOuterRect.Width() - mBorderCornerDimensions[aCorner].width;
+    if (aCorner == C_BR || aCorner == C_BL)
+      offset.y += mOuterRect.Height() - mBorderCornerDimensions[aCorner].height;
 
-  mContext->Rectangle(gfxRect(mOuterRect.TopLeft() + offset,
-                              mBorderCornerDimensions[aCorner]));
+    mContext->Rectangle(gfxRect(offset,
+                                mBorderCornerDimensions[aCorner]));
+  } else {
+    gfxPoint center,q;
+
+    const gfxFloat xCornerMults[4] = { -1, 1, 1, -1 };
+    const gfxFloat yCornerMults[4] = { 1, 1, -1, -1 };
+    //gfxFloat cornerMult[2] = { xCornerMults[aCorner], yCornerMults[aCorner] };
+
+    if (aCorner == C_TR || aCorner == C_BR)
+      offset.x += mOuterRect.Width();
+    if (aCorner == C_BR || aCorner == C_BL)
+      offset.y += mOuterRect.Height();
+
+    center.x = offset.x + xCornerMults[aCorner] * mBorderCornerDimensions[aCorner].width;
+    center.y = offset.y + yCornerMults[aCorner] * mBorderCornerDimensions[aCorner].height;
+
+    if(pos == 1){
+      q.y = offset.y;
+      q.x = center.x;
+    } else {
+      q.y = center.y;
+      q.x = offset.x;
+    }
+
+    mContext->MoveTo(center);
+    mContext->LineTo(q);
+    mContext->LineTo(offset);
+    mContext->ClosePath();
+  }
 }
 
 void
@@ -1183,7 +1231,7 @@ nsCSSBorderRenderer::DrawDashedSide(mozilla::css::Side aSide)
     return;
 
   if (style == NS_STYLE_BORDER_STYLE_DASHED) {
-    dashLength = gfxFloat(borderWidth * DOT_LENGTH * DASH_LENGTH);
+    dashLength = mDashLength;
     gapLength = CalculateGaps(aSide, dashLength, &offset);
 
     dash[0] = dashLength;
@@ -1192,14 +1240,12 @@ nsCSSBorderRenderer::DrawDashedSide(mozilla::css::Side aSide)
     mContext->SetLineCap(gfxContext::LINE_CAP_BUTT);
   } else {
     SF("DrawDashedSide: style: %d!!\n", style);
-    NS_ERROR("DrawDashedSide called with style other than DASHED or DOTTED; someone's not playing nice");
+    NS_ERROR("DrawDashedSide called with style other than DASHEDs someone's not playing nice");
     return;
   }
 
   SF("dash: %f %f\n", dash[0], dash[1]);
 
-  //mContext->SetDash(dash, 2, 0.0);
-  //double(offset)
   mContext->SetDash(dash, 2, offset);
 
   gfxPoint start = mOuterRect.CCWCorner(aSide);
@@ -1208,7 +1254,7 @@ nsCSSBorderRenderer::DrawDashedSide(mozilla::css::Side aSide)
   if (aSide == NS_SIDE_TOP) {
     start.x += mBorderCornerDimensions[C_TL].width;
     end.x -= mBorderCornerDimensions[C_TR].width;
-;
+
     start.y += borderWidth / 2.0;
     end.y += borderWidth / 2.0;
   } else if (aSide == NS_SIDE_RIGHT) {
@@ -1238,6 +1284,27 @@ nsCSSBorderRenderer::DrawDashedSide(mozilla::css::Side aSide)
   mContext->SetColor(gfxRGBA(borderColor));
   //mContext->SetColor(gfxRGBA(1.0, 0.0, 0.0, 1.0));
   mContext->Stroke();
+
+  mozilla::css::Corner lCorner= mozilla::css::Corner(aSide),
+  rCorner = mozilla::css::Corner((aSide+1)%4);
+
+  if(mInnerRadii[lCorner].width && mInnerRadii[lCorner].height)
+    DrawCorner(lCorner,dashLength,gapLength,-1);
+  else
+    DrawSolidCorner(lCorner,-1);
+
+  if(mInnerRadii[rCorner].width && mInnerRadii[rCorner].height)
+    DrawCorner(rCorner,dashLength,gapLength,1);
+  else
+    DrawSolidCorner(rCorner,1);
+
+  if(mBorderStyles[(aSide + 1)%4] == NS_STYLE_BORDER_STYLE_SOLID ||
+     mBorderStyles[(aSide + 1)%4] == NS_STYLE_BORDER_STYLE_DOTTED)
+    DrawSolidCorner(rCorner,-1);
+
+  if(mBorderStyles[(aSide + 3)%4] == NS_STYLE_BORDER_STYLE_SOLID ||
+     mBorderStyles[(aSide + 3)%4] == NS_STYLE_BORDER_STYLE_DOTTED)
+    DrawSolidCorner(lCorner, 1);
 }
 
 gfxFloat
@@ -1255,11 +1322,11 @@ nsCSSBorderRenderer::CalculateGaps(mozilla::css::Side aSide,
 
   if (aSide == NS_SIDE_TOP || aSide == NS_SIDE_BOTTOM)
   {
-    straightLength = mOuterRect.width -
+    straightLength = mOuterRect.width + mBorderWidths[sideL] + mBorderWidths[cornerR] -
                      NS_MAX(mBorderRadii[cornerL].width, mBorderWidths[sideL]) -
                      NS_MAX(mBorderRadii[cornerR].width, mBorderWidths[cornerR]);
   } else {
-    straightLength = mOuterRect.height -
+    straightLength = mOuterRect.height + mBorderWidths[sideL] + mBorderWidths[cornerR] -
                      NS_MAX(mBorderRadii[cornerL].width, mBorderWidths[sideL]) -
                      NS_MAX(mBorderRadii[cornerR].width, mBorderWidths[cornerR]);
   }
@@ -1280,7 +1347,6 @@ nsCSSBorderRenderer::CalculateGaps(mozilla::css::Side aSide,
   if (curvedLengthL < dashLength/2){
     *offset = curvedLengthL + dashLength/2;
   } else {
-    // *offset = (curvedLengthL - dashLength/2)%(dashLength + gapLength) + dashLength;
     *offset = curvedLengthL + dashLength/2 - int((curvedLengthL - dashLength/2)/(dashLength + gapLength)) * (curvedLengthL - dashLength/2) ;
   }
 
@@ -1331,7 +1397,7 @@ nsCSSBorderRenderer::DrawCorner(mozilla::css::Corner aCorner,
   // TODO :: check this dir problem
 
   gfxPoint corner = mOuterRect.TopLeft();
-  const gfxFloat pi = 3.14159, delta = 0.1;
+  const gfxFloat pi = 3.14159265, delta = 0.1*pi/180;
   gfxFloat combinedSize, start, endAngle, calcAngle, r, R, k,
            iPrevious, iCurrent, oPrevious, oCurrent, curlen, oStep, iStep;
   bool flag = false;
@@ -1362,8 +1428,11 @@ nsCSSBorderRenderer::DrawCorner(mozilla::css::Corner aCorner,
 
   if (iCurve[1] > iCurve[0]) shape = 1;
 
-  combinedSize = mBorderWidths[(aCorner - 1)%4] + mBorderWidths[aCorner];
-  start = mBorderWidths[aCorner] * pi/2 ;
+  int side = aCorner,
+      sidePrev = (side + 3)%4;
+
+  combinedSize = mBorderWidths[sidePrev] + mBorderWidths[side];
+  start = mBorderWidths[side]/combinedSize * pi/2 ;
 
   endAngle = (2 - aCorner)%4 * pi/2;
   if (endAngle == 0) endAngle = 2*pi ;
@@ -1447,7 +1516,7 @@ nsCSSBorderRenderer::DrawCorner(mozilla::css::Corner aCorner,
 
     if (dir*iCurrent >= dir*endAngle) break;
 
-    while (curlen < dash/2){
+    while (curlen < dash){
       iCurrent += dir*delta;
       curlen = R * EllipseE(k, iCurrent, iPrevious, shape);
     }
@@ -1492,38 +1561,35 @@ void
 nsCSSBorderRenderer::DrawSolidCorner(mozilla::css::Corner aCorner,
                                      int dir)
 {
-
-  gfxFloat borderRadii[2] = {mBorderRadii[aCorner].width ,
-                             mBorderRadii[aCorner].height};
   gfxFloat pi = 3.14159, calcAngle, startAngle;
   gfxPoint center, corner, p, q;
-  center = mOuterRect.TopLeft();
 
   if (aCorner == NS_CORNER_TOP_LEFT) {
-    center.x += mBorderCornerDimensions[C_TL].width;
-    center.y += mBorderCornerDimensions[C_TL].height;
+    center.x = mBorderRadii[C_TL].width;
+    center.y = mBorderRadii[C_TL].height;
   } else if (aCorner == NS_CORNER_TOP_RIGHT) {
-    center.x += mOuterRect.width - mBorderCornerDimensions[C_TR].width;
-    center.y += mBorderCornerDimensions[C_TR].height;
+    center.x = mOuterRect.width - mBorderRadii[C_TR].width;
+    center.y = mBorderRadii[C_TR].height;
   } else if (aCorner == NS_CORNER_BOTTOM_RIGHT) {
-    center.x += mOuterRect.width - mBorderCornerDimensions[C_BR].width;
-    center.y += mOuterRect.height - mBorderCornerDimensions[C_BR].height;
+    center.x = mOuterRect.width - mBorderRadii[C_BR].width;
+    center.y = mOuterRect.height - mBorderRadii[C_BR].height;
   } else if (aCorner == NS_CORNER_BOTTOM_LEFT) {
-    center.x += mBorderCornerDimensions[C_BL].width;
-    center.y += mOuterRect.height - mBorderCornerDimensions[C_BL].height;
+    center.x = mBorderRadii[C_BL].width;
+    center.y = mOuterRect.height - mBorderRadii[C_BL].height;
   }
 
   mContext->Save();
-  mContext->Translate(corner);
+  mContext->Translate(gfxPoint(mOuterRect.TopLeft().x + center.x,
+                               mOuterRect.TopLeft().y + center.y));
   mContext->Scale(1.0,-1.0);
 
   const gfxFloat xCornerMults[4] = { -1, 1, 1, -1 };
   const gfxFloat yCornerMults[4] = { 1, 1, -1, -1 };
   gfxFloat cornerMult[2] = { xCornerMults[aCorner], yCornerMults[aCorner] };
 
-  gfxFloat combinedSize = mBorderWidths[(aCorner-1)%4] + mBorderWidths[aCorner],
+  gfxFloat combinedSize = mBorderWidths[(aCorner+3)%4] + mBorderWidths[aCorner],
            start = mBorderWidths[aCorner]/combinedSize * pi/2,
-           endAngle = (2 - aCorner)%4 * pi/2;
+           endAngle = (6 - aCorner)%4 * pi/2;
   gfxFloat oCurve[2] = { mBorderRadii[aCorner].width,
                          mBorderRadii[aCorner].height};
 
@@ -1535,8 +1601,8 @@ nsCSSBorderRenderer::DrawSolidCorner(mozilla::css::Corner aCorner,
     endAngle -= pi/2;
     calcAngle = endAngle;
   }
-  //TODO add the checking condn when paramToAbs(start, oCurve[(corner + 1)%2], oCurve[corner%2]) raises error
-  if (oCurve[(aCorner + 1)%2] == 0) {
+
+  if (oCurve[0] == 0 || oCurve[1] == 0) {
     mContext->MoveTo(gfxPoint(oCurve[0] * cos(endAngle), oCurve[1] * sin(endAngle)));
   } else {
     startAngle = calcAngle + ParamToAbs(start, oCurve[(aCorner + 1)%2], oCurve[aCorner%2]);
@@ -1553,7 +1619,7 @@ nsCSSBorderRenderer::DrawSolidCorner(mozilla::css::Corner aCorner,
   int side = (dir == 1)? (aCorner - 1)%4 : aCorner;
 
   if (aCorner%2 == 0) {
-    corner.x = (oCurve[0] - mBorderWidths[(aCorner-1)%4]) * cornerMult[0] ;
+    corner.x = (oCurve[0] - mBorderWidths[(aCorner+3)%4]) * cornerMult[0] ;
     corner.y = (oCurve[1] - mBorderWidths[aCorner]) * cornerMult[1] ;
     if (aCorner == side) {
         p.x = NS_MIN(oCurve[0] - mBorderWidths[(aCorner-1)%4],0.0) * cornerMult[0];
@@ -1564,10 +1630,10 @@ nsCSSBorderRenderer::DrawSolidCorner(mozilla::css::Corner aCorner,
     }
   } else {
     corner.x = (oCurve[0] - mBorderWidths[aCorner]) * cornerMult[0];
-    corner.y = (oCurve[1] - mBorderWidths[(aCorner-1)%4]) * cornerMult[1];
+    corner.y = (oCurve[1] - mBorderWidths[(aCorner+3)%4]) * cornerMult[1];
     if (aCorner == side) {
         p.x = oCurve[0] * cornerMult[0];
-        p.y = NS_MIN(oCurve[1] - mBorderWidths[(aCorner-1)%4],0.0) * cornerMult[1];
+        p.y = NS_MIN(oCurve[1] - mBorderWidths[(aCorner+3)%4],0.0) * cornerMult[1];
     } else {
         p.x = NS_MIN(oCurve[0] - mBorderWidths[aCorner],0.0) * cornerMult[0];
         p.y = oCurve[1] * cornerMult[1];
@@ -2173,19 +2239,29 @@ nsCSSBorderRenderer::DrawBorders()
       if (!IsZeroSize(mBorderRadii[corner]))
         continue;
 
-      if (mBorderWidths[sides[0]] == 1.0 && mBorderWidths[sides[1]] == 1.0) {
+/*      if (mBorderWidths[sides[0]] == 1.0 && mBorderWidths[sides[1]] == 1.0) {
         if (corner == NS_CORNER_TOP_LEFT || corner == NS_CORNER_TOP_RIGHT)
           mBorderCornerDimensions[corner].width = 0.0;
         else
           mBorderCornerDimensions[corner].height = 0.0;
+      }
+*/    }
+
+    // Normalize the input .
+    MyInnerRadii(&mBorderRadii, mBorderWidths, &mInnerRadii);
+
+    mDashLength = mBorderWidths[0] * 2;
+    for (int i=1;i<4;i++){
+      if(2*mBorderWidths[i] > mDashLength){
+        mDashLength = 2*mBorderWidths[i];
       }
     }
 
     // First, the corners
     NS_FOR_CSS_CORNERS(corner) {
       // if there's no corner, don't do all this work for it
-      if (IsZeroSize(mBorderCornerDimensions[corner]))
-        continue;
+      //if (IsZeroSize(mBorderCornerDimensions[corner]))
+      //  continue;
 
       const PRIntn sides[2] = { corner, PREV_SIDE(corner) };
       PRIntn sideBits = (1 << sides[0]) | (1 << sides[1]);
@@ -2202,11 +2278,36 @@ nsCSSBorderRenderer::DrawBorders()
           IsSolidCornerStyle(mBorderStyles[sides[0]], corner))
       {
         mContext->NewPath();
-        DoCornerSubPath(corner);
-        mContext->SetColor(MakeBorderColor(mBorderColors[sides[0]],
-                                           mBackgroundColor,
-                                           BorderColorStyleForSolidCorner(mBorderStyles[sides[0]], corner)));
-        mContext->Fill();
+        if(corner == C_TL || corner == C_BR){
+          DoCornerSubPath(corner,1);
+          mContext->SetColor(mBorderColors[corner]);
+          mContext->Fill();
+          DoCornerSubPath(corner,-1);
+          mContext->SetColor(mBorderColors[(corner-1)%4]);
+          mContext->Fill();
+        } else {
+          DoCornerSubPath(corner,1);
+          mContext->SetColor(mBorderColors[(corner-1)%4]);
+          mContext->Fill();
+          DoCornerSubPath(corner,-1);
+          mContext->SetColor(mBorderColors[corner]);
+          mContext->Fill();
+        }
+        //mContext->SetColor(MakeBorderColor(mBorderColors[sides[0]],
+        //                                    mBackgroundColor,
+        //                                    BorderColorStyleForSolidCorner(mBorderStyles[sides[0]], corner)));
+        //mContext->Fill();
+        //continue;
+      }
+
+      if ((mBorderStyles[sides[0]] == NS_STYLE_BORDER_STYLE_DASHED &&
+           mBorderStyles[sides[1]] == NS_STYLE_BORDER_STYLE_DASHED) ||
+         (mBorderStyles[sides[0]] == NS_STYLE_BORDER_STYLE_DASHED &&
+          (mBorderStyles[sides[1]] == NS_STYLE_BORDER_STYLE_SOLID ||
+           mBorderStyles[sides[1]] == NS_STYLE_BORDER_STYLE_DOTTED) ) ||
+         (mBorderStyles[sides[0]] == NS_STYLE_BORDER_STYLE_DASHED &&
+          (mBorderStyles[sides[1]] == NS_STYLE_BORDER_STYLE_SOLID ||
+           mBorderStyles[sides[1]] == NS_STYLE_BORDER_STYLE_DOTTED) )){
         continue;
       }
 
@@ -2286,8 +2387,6 @@ nsCSSBorderRenderer::DrawBorders()
     }
 
     // We're done with the corners, now draw the sides.
-    MyInnerRadii(&mBorderRadii, mBorderWidths, &mInnerRadii);
-
     NS_FOR_CSS_SIDES (side) {
       // if we drew it above, skip it
       if (alreadyDrawnSides & (1 << side))
@@ -2308,7 +2407,7 @@ nsCSSBorderRenderer::DrawBorders()
         SN("---------------- (d)");
         continue;
       } else if(mBorderStyles[side] == NS_STYLE_BORDER_STYLE_DOTTED){
-        //DrawDottedSide (side);
+        DrawDottedSide (side);
 
         continue;
       }

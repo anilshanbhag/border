@@ -124,6 +124,9 @@ struct nsCSSBorderRenderer {
   gfxCornerSizes mBorderRadii;
   gfxCornerSizes mInnerRadii;
 
+  // global dashlength
+  gfxFloat mDashLength;
+
   // colors
   const nscolor* mBorderColors;
   nsBorderColors* const* mCompositeColors;
@@ -155,7 +158,7 @@ struct nsCSSBorderRenderer {
   //
 
   // add the path for drawing the given corner to the context
-  void DoCornerSubPath(mozilla::css::Corner aCorner);
+  void DoCornerSubPath(mozilla::css::Corner aCorner,int pos);
   // add the path for drawing the given side without any adjacent corners to the context
   void DoSideClipWithoutCornersSubPath(mozilla::css::Side aSide);
 
