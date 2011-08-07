@@ -209,8 +209,8 @@ struct nsCSSBorderRenderer {
   void DrawDashedSide (mozilla::css::Side aSide);
   gfxFloat CalculateGaps(mozilla::css::Side aSide, gfxFloat& dashLength, gfxFloat *offset);
   gfxFloat ComputeCurvedLength(mozilla::css::Side side, mozilla::css::Corner corner);
-  void DrawCorner(mozilla::css::Corner aCorner, gfxFloat& dash,
-                  gfxFloat& gap, int direction);
+  void DrawDashedCorner(mozilla::css::Corner aCorner, gfxFloat& dash,
+                        gfxFloat& gap, int direction, bool solid=false);
   void DrawSolidCorner(mozilla::css::Corner aCorner, int dir);
   // Setup the stroke style for a given side
   void SetupStrokeStyle(mozilla::css::Side aSize);
