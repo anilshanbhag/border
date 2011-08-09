@@ -145,93 +145,6 @@ AllCornersZeroSize(const gfxCornerSizes& corners) {
     IsZeroSize(corners[NS_CORNER_BOTTOM_LEFT]);
 }
 
-/*
- * Start addition
- */
-
-static gfxFloat
-func1(gfxFloat x,
-      gfxFloat t)
-{
-  return sqrt(1-x*sin(t)*sin(t));
-}
-
-static gfxFloat
-func2(gfxFloat x,
-      gfxFloat t)
-{
-  return sqrt(1-x*cos(t)*cos(t));
-}
-
-static gfxFloat
-gfxAbs(gfxFloat a)
-{
-  if(a>=0) return a;
-  else return -a;
-}
-
-static gfxFloat
-EllipseE(gfxFloat k,
-         gfxFloat ph1,
-         gfxFloat ph2,
-         bool shape = 1)
-{
-  if (shape) {
-    return gfxAbs(ph2-ph1)/8 * (func1(k, ph1) +
-                             3*func1(k, (2*ph1 + ph2)/3) +
-                             3*func1(k, (ph1 + 2*ph2)/3) +
-                             func1(k, ph2));
-  } else {
-    return gfxAbs(ph2-ph1)/8 * (func2(k, ph1) +
-                             3*func2(k, (2*ph1 + ph2)/3) +
-                             3*func2(k, (ph1 + 2*ph2)/3) +
-                             func2(k, ph2));
-  }
-}
-
-  //TODO add the checking condn when paramToAbs(start, oCurve[(corner + 1)%2], oCurve[corner%2]) raises error
-  // a == 0
-static gfxFloat
-ParamToAbs(gfxFloat& tp,
-           gfxFloat& a,
-           gfxFloat& b)
-{
-  return atan(b*tan(tp)/a);
-}
-
-static gfxFloat
-OIntersect(gfxFloat tp,
-           gfxFloat ia,
-           gfxFloat ib,
-           gfxFloat oa,
-           gfxFloat ob)
-{
-  if(sin(tp) == 0 || cos(tp) == 0)
-    return tp;
-
-  gfxFloat x,y,z,sr,C,A,B;
-
-  x = ib*ob / sin(tp);
-  y = ia*oa / cos(tp);
-
-  z = ia*ia - ib*ib;
-  sr = sqrt(x*x + y*y);
-  C = acos(z / sr);
-  A = acos(y / sr);
-
-  if (C > 0){
-    B = C - A;
-  } else {
-    B = -C - A;
-  }
-
-  return B;
-}
-
-/*
- * End Addition
- */
-
 typedef enum {
   // Normal solid square corner.  Will be rectangular, the size of the
   // adjacent sides.  If the corner has a border radius, the corner
@@ -312,19 +225,15 @@ nsCSSBorderRenderer::MyInnerRadii(gfxCornerSizes *aOuterRadiiRet,
                                   const gfxFloat *aBorderSizes,
                                   gfxCornerSizes *aInnerRadiiRet)
 {
-  // TODO Fix [] -> . errors
-
-  //gfxFloat oRadii[4][2] = [mBorderRadii.width(), mBorderRadii.height()];
-  //gfxFloat iRadii[4][2] = [bRadii.width(), bRadii.height()];
-
   gfxCornerSizes& oRadii = *aOuterRadiiRet;
   gfxCornerSizes& iRadii = *aInnerRadiiRet;
+
 
   NS_FOR_CSS_CORNERS(i) {
     gfxFloat ratio;
 
     mozilla::css::Corner iR = mozilla::css::Corner((i+1) % 4),
-        iL = mozilla::css::Corner((i-1)%4);
+        iL = mozilla::css::Corner((i+3)%4);
 
     bool pt1, pt2;
 
@@ -468,7 +377,6 @@ nsCSSBorderRenderer::IsSolidCornerStyle(PRUint8 aStyle, mozilla::css::Corner aCo
 {
   switch (aStyle) {
     case NS_STYLE_BORDER_STYLE_DOTTED:
-    // TODO Change here
     case NS_STYLE_BORDER_STYLE_DASHED:
     case NS_STYLE_BORDER_STYLE_SOLID:
       return PR_TRUE;
@@ -1216,8 +1124,16 @@ nsCSSBorderRenderer::DrawDottedSide(mozilla::css::Side aSide)
 void
 nsCSSBorderRenderer::DrawDashedSide(mozilla::css::Side aSide)
 {
+  /**
+   * This draws the straight section of the dashed side
+   * as well as the curved sections of corner
+   * adjoining to the side
+   * @param aSide - side to be drawn
+   */
+
   gfxFloat dashLength, gapLength, offset;
   gfxFloat dash[2];
+  gfxRGBA testColor;
 
   PRUint8 style = mBorderStyles[aSide];
   gfxFloat borderWidth = mBorderWidths[aSide];
@@ -1293,9 +1209,17 @@ nsCSSBorderRenderer::DrawDashedSide(mozilla::css::Side aSide)
   gfxFloat fakeDash[2] = {1000,10};
 
   if(mInnerRadii[lCorner].width && mInnerRadii[lCorner].height){
-    DrawDashedCorner(lCorner,dashLength, gapLength,-1);
+    DrawDashedCorner(lCorner,dashLength, gapLength, -1);
+    if(mBorderStyles[prevSide] == NS_STYLE_BORDER_STYLE_SOLID ||
+       mBorderStyles[prevSide] == NS_STYLE_BORDER_STYLE_DOTTED){
+      DrawDashedCorner(lCorner, fakeDash[0], fakeDash[1], 1);
+    }
   } else {
     DrawSolidCorner(lCorner,-1);
+    if(mBorderStyles[prevSide] == NS_STYLE_BORDER_STYLE_SOLID ||
+       mBorderStyles[prevSide] == NS_STYLE_BORDER_STYLE_DOTTED){
+      DrawSolidCorner(lCorner, 1);
+    }
   }
 
   if(mInnerRadii[rCorner].width && mInnerRadii[rCorner].height) {
@@ -1306,6 +1230,10 @@ nsCSSBorderRenderer::DrawDashedSide(mozilla::css::Side aSide)
     }
   } else {
     DrawSolidCorner(rCorner,1);
+    if(mBorderStyles[nextSide] == NS_STYLE_BORDER_STYLE_SOLID ||
+       mBorderStyles[nextSide] == NS_STYLE_BORDER_STYLE_DOTTED){
+      DrawSolidCorner(rCorner, -1);
+    }
   }
 }
 
@@ -1314,10 +1242,16 @@ nsCSSBorderRenderer::CalculateGaps(mozilla::css::Side aSide,
                                    gfxFloat& dashLength,
                                    gfxFloat *offset)
 {
+  /**
+   * Find the gaplength and the offset needed for drawing dashed side
+   * @param aSide - side under consideration
+   * @param dashLength - dashLength
+   * @param offset - offset to dash pattern while drawing straight section
+   */
   gfxFloat straightLength, curvedLengthL, curvedLengthR, totalLength,  gapLength;
   int n;
 
-  mozilla::css::Side sideL = mozilla::css::Side((aSide - 1) % 4);
+  mozilla::css::Side sideL = mozilla::css::Side((aSide + 3) % 4);
 
   mozilla::css::Corner cornerL = mozilla::css::Corner(aSide);
   mozilla::css::Corner cornerR = mozilla::css::Corner((aSide + 1) % 4);
@@ -1329,8 +1263,8 @@ nsCSSBorderRenderer::CalculateGaps(mozilla::css::Side aSide,
                      NS_MAX(mBorderRadii[cornerR].width, mBorderWidths[cornerR]);
   } else {
     straightLength = mOuterRect.height -
-                     NS_MAX(mBorderRadii[cornerL].width, mBorderWidths[sideL]) -
-                     NS_MAX(mBorderRadii[cornerR].width, mBorderWidths[cornerR]);
+                     NS_MAX(mBorderRadii[cornerL].height, mBorderWidths[sideL]) -
+                     NS_MAX(mBorderRadii[cornerR].height, mBorderWidths[cornerR]);
   }
 
   curvedLengthL = ComputeCurvedLength(aSide, cornerL);
@@ -1355,12 +1289,67 @@ nsCSSBorderRenderer::CalculateGaps(mozilla::css::Side aSide,
   return gapLength;
 }
 
+/**
+ * fsin and fcos inline functions used in EllipseE
+ */
+inline gfxFloat fsin(gfxFloat x, gfxFloat t)
+{  return sqrt(1-x*sin(t)*sin(t)); }
+
+inline static gfxFloat fcos(gfxFloat x, gfxFloat t)
+{  return sqrt(1-x*cos(t)*cos(t)); }
+
+/**
+ * Return the abs value of gfxFloat
+ */
+inline static gfxFloat gfxAbs(gfxFloat a)
+{
+  if(a>=0) return a;
+  else return -a;
+}
+
+static gfxFloat
+EllipseE(gfxFloat k,
+         gfxFloat ph1,
+         gfxFloat ph2,
+         bool shape = 1)
+{
+  /**
+   * Calculates the elliptical integral[second type] approximately
+   * using Simpsons's Rule .
+   * @param k - Square of eccentricity of innerCurve
+   * @param ph1,ph2 - Start and end angles
+   * @param shape - To choose betweeen having cos or sin
+   */
+  if (shape) {
+    return gfxAbs(ph2-ph1)/8 * (fsin(k, ph1) +
+                             3*fsin(k, (2*ph1 + ph2)/3) +
+                             3*fsin(k, (ph1 + 2*ph2)/3) +
+                             fsin(k, ph2));
+  } else {
+    return gfxAbs(ph2-ph1)/8 * (fcos(k, ph1) +
+                             3*fcos(k, (2*ph1 + ph2)/3) +
+                             3*fcos(k, (ph1 + 2*ph2)/3) +
+                             fcos(k, ph2));
+  }
+}
+
+inline static gfxFloat
+ParamToAbs(gfxFloat& tp, gfxFloat& a, gfxFloat& b)
+{ return atan(b*tan(tp)/a); }
+
 gfxFloat
 nsCSSBorderRenderer::ComputeCurvedLength(mozilla::css::Side side,
                                          mozilla::css::Corner corner)
 {
+  /**
+   * Finds the curved length of section of corner
+   * @param side - side under consideration
+   * @param corner - the corner who's section length needs to be found
+   */
   gfxFloat a, b, t, T, k, combinedSize, pi = 3.14159, null = 0.0;
 
+  //a is innerRadius touching the side under consideration
+  //b is the other one
   if (side%2 == 0){
     a = mInnerRadii[corner].height;
     b = mInnerRadii[corner].width;
@@ -1379,6 +1368,8 @@ nsCSSBorderRenderer::ComputeCurvedLength(mozilla::css::Side side,
 
   t = mBorderWidths[side]/combinedSize * pi/2 ;
 
+  // There would be two cases - one when a is along major axis
+  // Other when its the minor axis
   if (a >= b) {
     T = pi/2 - ParamToAbs(t, a, b);
     k = 1 - pow( (b/a), 2);
@@ -1390,6 +1381,45 @@ nsCSSBorderRenderer::ComputeCurvedLength(mozilla::css::Side side,
   }
 }
 
+static gfxFloat
+OIntersect(gfxFloat tp,
+           gfxFloat ia,
+           gfxFloat ib,
+           gfxFloat oa,
+           gfxFloat ob)
+{
+  /**
+   * Given the parametric angle of point of inner curve
+   * find its normal outer intersection
+   * @param tp - parametric angle of point on inner curve
+   * @param ia - innerradii adjacent to side which was being considered
+   * @param ib - the other innerradii
+   * @param oa - outerradii adjacent to side which was being considered
+   * @param ob - the other outerradii
+   */
+
+  if(sin(tp) == 0 || cos(tp) == 0)
+    return tp;
+
+  gfxFloat x,y,z,sr,C,A,B;
+
+  x = ib*ob / sin(tp);
+  y = ia*oa / cos(tp);
+
+  z = ia*ia - ib*ib;
+  sr = sqrt(x*x + y*y);
+  C = acos(z / sr);
+  A = acos(y / sr);
+
+  if (C > 0){
+    B = C - A;
+  } else {
+    B = -C - A;
+  }
+
+  return B;
+}
+
 void
 nsCSSBorderRenderer::DrawDashedCorner(mozilla::css::Corner aCorner,
                                       gfxFloat& dash,
@@ -1397,17 +1427,34 @@ nsCSSBorderRenderer::DrawDashedCorner(mozilla::css::Corner aCorner,
                                       int dir,
                                       bool isSolid)
 {
+  /**
+   * Move along the inner curve .
+   * Draw half a dash first ,
+   * then draw gap, dash till we reach endAngle
+   * @param aCorner - the corner
+   * @param dash - dash length
+   * @param gap - gap length
+   * @param dir - direction to move from the middle point chosen
+   * dir == 1 => anti-clockwise dir==1=> clockwise
+   */
+
   gfxPoint corner = mOuterRect.TopLeft();
   const gfxFloat pi = 3.14159265, delta = 0.1*pi/180;
   gfxFloat combinedSize, start, endAngle, calcAngle, r, R, k,
            iPrevious, iCurrent, oPrevious, oCurrent, curlen, oStep, iStep;
+
+  // maintain flag to know when to exit loop
   bool flag = false;
+
   int shape = 0;
 
   gfxFloat oCurve[2] = { mBorderRadii[aCorner].width,
                          mBorderRadii[aCorner].height},
            iCurve[2] = { mInnerRadii[aCorner].width,
                          mInnerRadii[aCorner].height};
+
+  // Shape of the inner curve - to know if major axis on x axis or not
+  if (iCurve[1] > iCurve[0]) shape = 1;
 
   if (aCorner == NS_CORNER_TOP_LEFT) {
     corner.x += mBorderCornerDimensions[C_TL].width;
@@ -1427,8 +1474,6 @@ nsCSSBorderRenderer::DrawDashedCorner(mozilla::css::Corner aCorner,
   mContext->Translate(corner);
   mContext->Scale(1.0,-1.0);
 
-  if (iCurve[1] > iCurve[0]) shape = 1;
-
   int side = aCorner,
       sidePrev = (side + 3)%4;
 
@@ -1445,6 +1490,7 @@ nsCSSBorderRenderer::DrawDashedCorner(mozilla::css::Corner aCorner,
     calcAngle = endAngle;
   }
 
+  // prefix i for variables for inner curve , o for outer curve
   iCurrent =  calcAngle + ParamToAbs(start, iCurve[(aCorner + 1)%2], iCurve[aCorner%2]);
   iPrevious = iCurrent;
 
@@ -1479,6 +1525,7 @@ nsCSSBorderRenderer::DrawDashedCorner(mozilla::css::Corner aCorner,
   oStep = (oCurrent - oPrevious)/30;
   iStep = (iCurrent - iPrevious)/30;
 
+  mContext->NewPath();
   mContext->MoveTo(gfxPoint(oCurve[0] * cos(oPrevious), oCurve[1] * sin(oPrevious)));
 
   for(int i=1;i<31;i++)
@@ -1492,8 +1539,10 @@ nsCSSBorderRenderer::DrawDashedCorner(mozilla::css::Corner aCorner,
                      iCurve[1] * sin(iCurrent - iStep*i)));
 
   mContext->ClosePath();
+
   nscolor borderColor = (dir == 1)? mBorderColors[sidePrev] : mBorderColors[side];
   mContext->SetColor(gfxRGBA(borderColor));
+
   mContext->Fill();
 
   oPrevious = oCurrent;
@@ -1535,6 +1584,7 @@ nsCSSBorderRenderer::DrawDashedCorner(mozilla::css::Corner aCorner,
     oStep = (oCurrent - oPrevious)/30;
     iStep = (iCurrent - iPrevious)/30;
 
+    mContext->NewPath();
     mContext->MoveTo(gfxPoint(oCurve[0] * cos(oPrevious), oCurve[1] * sin(oPrevious)));
 
     for(int i=1;i<31;i++)
@@ -1564,6 +1614,11 @@ void
 nsCSSBorderRenderer::DrawSolidCorner(mozilla::css::Corner aCorner,
                                      int dir)
 {
+  /**
+   * This draws the corner [with atleast one innerRadii 0]
+   * @param aCorner - corner to be drawn
+   * @param dir - direction to move from center -1 => clockwise 1 => antiC
+   */
   gfxFloat pi = 3.14159, calcAngle, startAngle;
   gfxPoint center, corner, p, q;
 
@@ -1596,6 +1651,7 @@ nsCSSBorderRenderer::DrawSolidCorner(mozilla::css::Corner aCorner,
   gfxFloat combinedSize = mBorderWidths[(aCorner+3)%4] + mBorderWidths[aCorner],
            start = mBorderWidths[aCorner]/combinedSize * pi/2,
            endAngle = (6 - aCorner)%4 * pi/2;
+
   gfxFloat oCurve[2] = { mBorderRadii[aCorner].width,
                          mBorderRadii[aCorner].height};
 
@@ -1608,6 +1664,8 @@ nsCSSBorderRenderer::DrawSolidCorner(mozilla::css::Corner aCorner,
     calcAngle = endAngle;
   }
 
+  // If both oCurve are zero - there is no curved part
+  mContext->NewPath();
   if (oCurve[0] == 0 || oCurve[1] == 0) {
     mContext->MoveTo(gfxPoint(oCurve[0] * cos(endAngle), oCurve[1] * sin(endAngle)));
   } else {
