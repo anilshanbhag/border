@@ -207,11 +207,20 @@ struct nsCSSBorderRenderer {
 
   // draw the given dashed side
   void DrawDashedSide (mozilla::css::Side aSide);
+
+  // calculate the gap length of a side
   gfxFloat CalculateGaps(mozilla::css::Side aSide, gfxFloat& dashLength, gfxFloat *offset);
+
+  // calculate the curved length along a corner section
   gfxFloat ComputeCurvedLength(mozilla::css::Side side, mozilla::css::Corner corner);
+
+  // draw dashed corner
   void DrawDashedCorner(mozilla::css::Corner aCorner, gfxFloat& dash,
                         gfxFloat& gap, int direction, bool solid=false);
+
+  // draw dashed corner - used when corner is split
   void DrawSolidCorner(mozilla::css::Corner aCorner, int dir);
+
   // Setup the stroke style for a given side
   void SetupStrokeStyle(mozilla::css::Side aSize);
 
@@ -247,6 +256,8 @@ struct nsCSSBorderRenderer {
   static void ComputeInnerRadii(const gfxCornerSizes& aRadii,
                                 const gfxFloat *aBorderSizes,
                                 gfxCornerSizes *aInnerRadiiRet);
+
+  // utility function - modification of ComputeInnerRadii
   void MyInnerRadii(gfxCornerSizes *aOuterRadiiRet,
                     const gfxFloat *aBorderSizes,
                     gfxCornerSizes *aInnerRadiiRet);

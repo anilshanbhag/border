@@ -225,6 +225,14 @@ nsCSSBorderRenderer::MyInnerRadii(gfxCornerSizes *aOuterRadiiRet,
                                   const gfxFloat *aBorderSizes,
                                   gfxCornerSizes *aInnerRadiiRet)
 {
+  /**
+   * Normalizes some not possible cases like
+   * sum of border radii along side exceeding its length
+   * Then calculates the inner radii
+   * @param aBorderSizes - border sizes
+   * @param aOuterRadiiRet - (to be normalized) contains outer radii sizes
+   * @param aInnerRadiiRet - (to be initialized) inner radii
+   */
   gfxCornerSizes& oRadii = *aOuterRadiiRet;
   gfxCornerSizes& iRadii = *aInnerRadiiRet;
 
@@ -430,11 +438,19 @@ nsCSSBorderRenderer::BorderColorStyleForSolidCorner(PRUint8 aStyle, mozilla::css
 }
 
 void
-nsCSSBorderRenderer::DoCornerSubPath(mozilla::css::Corner aCorner,int pos = 0)
+nsCSSBorderRenderer::DoCornerSubPath(mozilla::css::Corner aCorner,int part = 0)
 {
+  /**
+   * Does the corner OR corner section subpath
+   * @param aCorner - corner under consideration
+   * @param part - part to be considered
+   * part = 0 => Full Corner
+   * part = 1 => Section touching bottom/top side
+   * part = -1 => Section touching left/right side
+   */
   gfxPoint offset = mOuterRect.TopLeft();
 
-  if(!pos){
+  if(!part){
     if (aCorner == C_TR || aCorner == C_BR)
       offset.x += mOuterRect.Width() - mBorderCornerDimensions[aCorner].width;
     if (aCorner == C_BR || aCorner == C_BL)
@@ -457,7 +473,7 @@ nsCSSBorderRenderer::DoCornerSubPath(mozilla::css::Corner aCorner,int pos = 0)
     center.x = offset.x + xCornerMults[aCorner] * mBorderCornerDimensions[aCorner].width;
     center.y = offset.y + yCornerMults[aCorner] * mBorderCornerDimensions[aCorner].height;
 
-    if(pos == 1){
+    if(part == 1){
       q.y = offset.y;
       q.x = center.x;
     } else {
@@ -1036,6 +1052,10 @@ nsCSSBorderRenderer::DrawBorderSides(PRIntn aSides)
 void
 nsCSSBorderRenderer::DrawDottedSide(mozilla::css::Side aSide)
 {
+  /**
+   * Draws the dotted side
+   */
+
   gfxFloat dashWidth;
   gfxFloat dash[2];
 
@@ -1113,13 +1133,8 @@ nsCSSBorderRenderer::DrawDottedSide(mozilla::css::Side aSide)
   mContext->LineTo(end);
   mContext->SetLineWidth(borderWidth);
   mContext->SetColor(gfxRGBA(borderColor));
-  //mContext->SetColor(gfxRGBA(1.0, 0.0, 0.0, 1.0));
   mContext->Stroke();
 }
-
-/*
- * Start Addition
- */
 
 void
 nsCSSBorderRenderer::DrawDashedSide(mozilla::css::Side aSide)
@@ -1207,6 +1222,9 @@ nsCSSBorderRenderer::DrawDashedSide(mozilla::css::Side aSide)
   nextSide = mozilla::css::Side((aSide + 1)%4);
 
   gfxFloat fakeDash[2] = {1000,10};
+
+  // While drawing the corners we would have not drawn sections of adjacent
+  // sides if they were solid or dashed . We need to draw it from here .
 
   if(mInnerRadii[lCorner].width && mInnerRadii[lCorner].height){
     DrawDashedCorner(lCorner,dashLength, gapLength, -1);
@@ -1370,6 +1388,7 @@ nsCSSBorderRenderer::ComputeCurvedLength(mozilla::css::Side side,
 
   // There would be two cases - one when a is along major axis
   // Other when its the minor axis
+  // We need to choose the appropriate start and end points for each case
   if (a >= b) {
     T = pi/2 - ParamToAbs(t, a, b);
     k = 1 - pow( (b/a), 2);
@@ -1403,6 +1422,10 @@ OIntersect(gfxFloat tp,
 
   gfxFloat x,y,z,sr,C,A,B;
 
+  // Solve the equation of normal and point on outer ellipse
+  // ia**2 * (x - x0) / x0 = ib**2 * (y - y0) / y0
+  // (x,y) is point on outer ellipse = (oa * cosX ,ob * sinX)
+  // (x0,y0) is point on inner ellipse = (ia * costp, ib * sintp)
   x = ib*ob / sin(tp);
   y = ia*oa / cos(tp);
 
@@ -1470,6 +1493,7 @@ nsCSSBorderRenderer::DrawDashedCorner(mozilla::css::Corner aCorner,
     corner.y += mOuterRect.height - mBorderCornerDimensions[C_BL].height;
   }
 
+  // Move to corner and flip the y axis
   mContext->Save();
   mContext->Translate(corner);
   mContext->Scale(1.0,-1.0);
@@ -1616,6 +1640,8 @@ nsCSSBorderRenderer::DrawSolidCorner(mozilla::css::Corner aCorner,
 {
   /**
    * This draws the corner [with atleast one innerRadii 0]
+   * In the general case it involves drawing a section with 5 points
+   * with a curve between two of the points
    * @param aCorner - corner to be drawn
    * @param dir - direction to move from center -1 => clockwise 1 => antiC
    */
@@ -1720,10 +1746,6 @@ nsCSSBorderRenderer::DrawSolidCorner(mozilla::css::Corner aCorner,
 
   mContext->Restore();
 }
-
-/*
- * End Addition
- */
 
 void
 nsCSSBorderRenderer::SetupStrokeStyle(mozilla::css::Side aSide)
