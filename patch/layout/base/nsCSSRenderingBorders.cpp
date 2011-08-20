@@ -1502,7 +1502,10 @@ nsCSSBorderRenderer::DrawDashedCorner(mozilla::css::Corner aCorner,
       sidePrev = (side + 3)%4;
 
   combinedSize = mBorderWidths[sidePrev] + mBorderWidths[side];
-  start = mBorderWidths[side]/combinedSize * pi/2 ;
+
+  // The start angle in the quadrant [ 0, pi/2 ]
+  // Consider adding 2*delta offset = 0.2 deg to get corner sections joined
+  start = mBorderWidths[side]/combinedSize * pi/2 - 2*dir*delta;
 
   endAngle = (6 - aCorner)%4 * pi/2;
   if (endAngle == 0) endAngle = 2*pi ;
@@ -1675,7 +1678,7 @@ nsCSSBorderRenderer::DrawSolidCorner(mozilla::css::Corner aCorner,
   gfxFloat cornerMult[2] = { xCornerMults[aCorner], yCornerMults[aCorner] };
 
   gfxFloat combinedSize = mBorderWidths[(aCorner+3)%4] + mBorderWidths[aCorner],
-           start = mBorderWidths[aCorner]/combinedSize * pi/2,
+           start = mBorderWidths[aCorner]/combinedSize * pi/2 - dir*0.2*pi/180,
            endAngle = (6 - aCorner)%4 * pi/2;
 
   gfxFloat oCurve[2] = { mBorderRadii[aCorner].width,
@@ -1801,29 +1804,86 @@ nsCSSBorderRenderer::CreateCornerGradient(mozilla::css::Corner aCorner,
                                           const gfxRGBA &aFirstColor,
                                           const gfxRGBA &aSecondColor)
 {
-  typedef struct { gfxFloat a, b; } twoFloats;
+  gfxPoint corner = mOuterRect.TopLeft(), pat1, pat2;
 
-  const twoFloats gradientCoeff[4] = { { -1, +1 },
-                                       { -1, -1 },
-                                       { +1, -1 },
-                                       { +1, +1 } };
+  const gfxFloat pi = 3.14159265, delta = 0.1*pi/180;
+  gfxFloat combinedSize, slope, start, calcAngle, startAngle, endAngle, outerCurveDemarcation;
 
-  // Sides which form the 'width' and 'height' for the calculation of the angle
-  // for our gradient.
-  const int cornerWidth[4] = { 3, 1, 1, 3 };
-  const int cornerHeight[4] = { 0, 0, 2, 2 };
+  gfxFloat oCurve[2] = { mBorderRadii[aCorner].width,
+                         mBorderRadii[aCorner].height};
 
-  gfxPoint cornerOrigin = mOuterRect.AtCorner(aCorner);
+  int side = aCorner,
+      sidePrev = (side + 3)%4;
 
-  gfxPoint pat1, pat2;
-  pat1.x = cornerOrigin.x +
-    mBorderWidths[cornerHeight[aCorner]] * gradientCoeff[aCorner].a;
-  pat1.y = cornerOrigin.y +
-    mBorderWidths[cornerWidth[aCorner]]  * gradientCoeff[aCorner].b;
-  pat2.x = cornerOrigin.x -
-    mBorderWidths[cornerHeight[aCorner]] * gradientCoeff[aCorner].a;
-  pat2.y = cornerOrigin.y -
-    mBorderWidths[cornerWidth[aCorner]]  * gradientCoeff[aCorner].b;
+  nsRefPtr<gfxPattern> pattern;
+
+  if (aCorner == NS_CORNER_TOP_LEFT) {
+    corner.x += mBorderCornerDimensions[C_TL].width;
+    corner.y += mBorderCornerDimensions[C_TL].height;
+  } else if (aCorner == NS_CORNER_TOP_RIGHT) {
+    corner.x += mOuterRect.width - mBorderCornerDimensions[C_TR].width;
+    corner.y += mBorderCornerDimensions[C_TR].height;
+  } else if (aCorner == NS_CORNER_BOTTOM_RIGHT) {
+    corner.x += mOuterRect.width - mBorderCornerDimensions[C_BR].width;
+    corner.y += mOuterRect.height - mBorderCornerDimensions[C_BR].height;
+  } else if (aCorner == NS_CORNER_BOTTOM_LEFT) {
+    corner.x += mBorderCornerDimensions[C_BL].width;
+    corner.y += mOuterRect.height - mBorderCornerDimensions[C_BL].height;
+  }
+
+  // The start angle in the quadrant [ 0, pi/2 ]
+  if (oCurve[0] > 0 && oCurve[1] > 0) {
+    combinedSize = mBorderWidths[sidePrev] + mBorderWidths[side];
+
+    // The start angle in the quadrant [ 0, pi/2 ]
+    start = mBorderWidths[side]/combinedSize * pi/2;
+
+    endAngle = (6 - aCorner)%4 * pi/2;
+    if (endAngle == 0) endAngle = 2*pi ;
+
+    endAngle -= pi/2;
+    calcAngle = endAngle;
+
+    startAngle = calcAngle + start;
+    slope = -1/tan(startAngle);
+    outerCurveDemarcation = calcAngle + ParamToAbs(start, oCurve[(aCorner + 1)%2], oCurve[aCorner%2]);
+    pat1.x = corner.x + oCurve[0] * cos(outerCurveDemarcation) + 1;
+    pat1.y = corner.y - oCurve[1] * sin(outerCurveDemarcation) - slope;
+
+    pat2.x = corner.x + oCurve[0] * cos(outerCurveDemarcation) - 1;
+    pat2.y = corner.y - oCurve[1] * sin(outerCurveDemarcation) + slope;
+
+    if (aCorner == C_TL || aCorner == C_TR) {
+      pattern = new gfxPattern(pat2.x, pat2.y, pat1.x, pat1.y);
+    } else {
+      pattern = new gfxPattern(pat1.x, pat1.y, pat2.x, pat2.y);
+    }
+  } else {
+     typedef struct { gfxFloat a, b; } twoFloats;
+
+     const twoFloats gradientCoeff[4] = { { -1, +1 },
+                                          { -1, -1 },
+                                          { +1, -1 },
+                                          { +1, +1 } };
+
+     // Sides which form the 'width' and 'height' for the calculation of the angle
+     // for our gradient.
+     const int cornerWidth[4] = { 3, 1, 1, 3 };
+     const int cornerHeight[4] = { 0, 0, 2, 2 };
+
+     gfxPoint cornerOrigin = mOuterRect.AtCorner(aCorner);
+
+     pat1.x = cornerOrigin.x +
+       mBorderWidths[cornerHeight[aCorner]] * gradientCoeff[aCorner].a;
+     pat1.y = cornerOrigin.y +
+       mBorderWidths[cornerWidth[aCorner]]  * gradientCoeff[aCorner].b;
+     pat2.x = cornerOrigin.x -
+       mBorderWidths[cornerHeight[aCorner]] * gradientCoeff[aCorner].a;
+     pat2.y = cornerOrigin.y -
+       mBorderWidths[cornerWidth[aCorner]]  * gradientCoeff[aCorner].b;
+
+     pattern = new gfxPattern(pat1.x, pat1.y, pat2.x, pat2.y);
+  }
 
   float gradientOffset;
 
@@ -1836,11 +1896,10 @@ nsCSSBorderRenderer::CreateCornerGradient(mozilla::css::Corner aCorner,
     gradientOffset = 0;
   } else {
     // When cairo does the gradient drawing this gives us pretty nice behavior!
-    gradientOffset = 0.25 / sqrt(pow(mBorderWidths[cornerHeight[aCorner]], 2) +
-                                 pow(mBorderWidths[cornerHeight[aCorner]], 2));
+    gradientOffset = 0.25 / sqrt(pow(mBorderWidths[side], 2) +
+                                 pow(mBorderWidths[sidePrev], 2));
   }
 
-  nsRefPtr<gfxPattern> pattern = new gfxPattern(pat1.x, pat1.y, pat2.x, pat2.y);
   pattern->AddColorStop(0.5 - gradientOffset, gfxRGBA(aFirstColor));
   pattern->AddColorStop(0.5 + gradientOffset, gfxRGBA(aSecondColor));
 
@@ -2363,21 +2422,32 @@ nsCSSBorderRenderer::DrawBorders()
           IsZeroSize(mBorderRadii[corner]) &&
           IsSolidCornerStyle(mBorderStyles[sides[0]], corner))
       {
-        mContext->NewPath();
-        if(corner == C_TL || corner == C_BR){
-          DoCornerSubPath(corner,1);
-          mContext->SetColor(mBorderColors[corner]);
-          mContext->Fill();
-          DoCornerSubPath(corner,-1);
-          mContext->SetColor(mBorderColors[(corner+3)%4]);
-          mContext->Fill();
+        if(mBorderColors[sides[0]] == mBorderColors[sides[1]]){
+         mContext->NewPath();
+         DoCornerSubPath(corner);
+         mContext->SetColor(MakeBorderColor(mBorderColors[sides[0]],
+                                            mBackgroundColor,
+                                            BorderColorStyleForSolidCorner(mBorderStyles[sides[0]], corner)));
+         mContext->Fill();
+         continue;
         } else {
-          DoCornerSubPath(corner,1);
-          mContext->SetColor(mBorderColors[(corner+3)%4]);
-          mContext->Fill();
-          DoCornerSubPath(corner,-1);
-          mContext->SetColor(mBorderColors[corner]);
-          mContext->Fill();
+          mContext->NewPath();
+          if(corner == C_TL || corner == C_BR){
+            DoCornerSubPath(corner,1);
+            mContext->SetColor(mBorderColors[corner]);
+            mContext->Fill();
+            DoCornerSubPath(corner,-1);
+            mContext->SetColor(mBorderColors[(corner+3)%4]);
+            mContext->Fill();
+          } else {
+            DoCornerSubPath(corner,1);
+            mContext->SetColor(mBorderColors[(corner+3)%4]);
+            mContext->Fill();
+            DoCornerSubPath(corner,-1);
+            mContext->SetColor(mBorderColors[corner]);
+            mContext->Fill();
+          }
+          continue;
         }
       }
 
