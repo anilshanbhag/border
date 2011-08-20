@@ -1806,11 +1806,20 @@ nsCSSBorderRenderer::CreateCornerGradient(mozilla::css::Corner aCorner,
 {
   gfxPoint corner = mOuterRect.TopLeft(), pat1, pat2;
 
+  typedef struct { gfxFloat a, b; } twoFloats;
+
+  const twoFloats gradientCoeff[4] = { { -1, +1 },
+                                      { -1, -1 },
+                                      { +1, -1 },
+                                      { +1, +1 } };
+
   const gfxFloat pi = 3.14159265, delta = 0.1*pi/180;
   gfxFloat combinedSize, slope, start, calcAngle, startAngle, endAngle, outerCurveDemarcation;
 
   gfxFloat oCurve[2] = { mBorderRadii[aCorner].width,
-                         mBorderRadii[aCorner].height};
+                         mBorderRadii[aCorner].height},
+           iCurve[2] = { mInnerRadii[aCorner].width,
+                         mInnerRadii[aCorner].height};
 
   int side = aCorner,
       sidePrev = (side + 3)%4;
@@ -1818,17 +1827,17 @@ nsCSSBorderRenderer::CreateCornerGradient(mozilla::css::Corner aCorner,
   nsRefPtr<gfxPattern> pattern;
 
   if (aCorner == NS_CORNER_TOP_LEFT) {
-    corner.x += mBorderCornerDimensions[C_TL].width;
-    corner.y += mBorderCornerDimensions[C_TL].height;
+    corner.x += mBorderRadii[C_TL].width;
+    corner.y += mBorderRadii[C_TL].height;
   } else if (aCorner == NS_CORNER_TOP_RIGHT) {
-    corner.x += mOuterRect.width - mBorderCornerDimensions[C_TR].width;
-    corner.y += mBorderCornerDimensions[C_TR].height;
+    corner.x += mOuterRect.width - mBorderRadii[C_TR].width;
+    corner.y += mBorderRadii[C_TR].height;
   } else if (aCorner == NS_CORNER_BOTTOM_RIGHT) {
-    corner.x += mOuterRect.width - mBorderCornerDimensions[C_BR].width;
-    corner.y += mOuterRect.height - mBorderCornerDimensions[C_BR].height;
+    corner.x += mOuterRect.width - mBorderRadii[C_BR].width;
+    corner.y += mOuterRect.height - mBorderRadii[C_BR].height;
   } else if (aCorner == NS_CORNER_BOTTOM_LEFT) {
-    corner.x += mBorderCornerDimensions[C_BL].width;
-    corner.y += mOuterRect.height - mBorderCornerDimensions[C_BL].height;
+    corner.x += mBorderRadii[C_BL].width;
+    corner.y += mOuterRect.height - mBorderRadii[C_BL].height;
   }
 
   // The start angle in the quadrant [ 0, pi/2 ]
@@ -1847,6 +1856,23 @@ nsCSSBorderRenderer::CreateCornerGradient(mozilla::css::Corner aCorner,
     startAngle = calcAngle + start;
     slope = -1/tan(startAngle);
     outerCurveDemarcation = calcAngle + ParamToAbs(start, oCurve[(aCorner + 1)%2], oCurve[aCorner%2]);
+
+    if(iCurve[0] == 0 || iCurve[1] == 0){
+      gfxPoint newCenter;
+
+      if (aCorner%2 == 0) {
+        newCenter.x = (oCurve[0] - mBorderWidths[(aCorner+3)%4]) * -gradientCoeff[aCorner].b;
+        newCenter.y = (oCurve[1] - mBorderWidths[aCorner]) * gradientCoeff[aCorner].a ;
+      } else {
+        newCenter.x = (oCurve[0] - mBorderWidths[aCorner]) * -gradientCoeff[aCorner].b;
+        newCenter.y = (oCurve[1] - mBorderWidths[(aCorner+3)%4]) * gradientCoeff[aCorner].a;
+      }
+
+      slope = (newCenter.x - oCurve[0] * cos(outerCurveDemarcation)) / (newCenter.y + oCurve[1] * sin(outerCurveDemarcation));
+    } else {
+      slope = -1/tan(startAngle);
+    }
+
     pat1.x = corner.x + oCurve[0] * cos(outerCurveDemarcation) + 1;
     pat1.y = corner.y - oCurve[1] * sin(outerCurveDemarcation) - slope;
 
@@ -1859,13 +1885,6 @@ nsCSSBorderRenderer::CreateCornerGradient(mozilla::css::Corner aCorner,
       pattern = new gfxPattern(pat1.x, pat1.y, pat2.x, pat2.y);
     }
   } else {
-     typedef struct { gfxFloat a, b; } twoFloats;
-
-     const twoFloats gradientCoeff[4] = { { -1, +1 },
-                                          { -1, -1 },
-                                          { +1, -1 },
-                                          { +1, +1 } };
-
      // Sides which form the 'width' and 'height' for the calculation of the angle
      // for our gradient.
      const int cornerWidth[4] = { 3, 1, 1, 3 };
@@ -1955,8 +1974,8 @@ nsCSSBorderRenderer::DrawNoCompositeColorSolidBorder()
 
   gfxPoint pc, pci, p0, p1, p2, p3, pd, p3i;
 
-  gfxCornerSizes innerRadii;
-  MyInnerRadii(&mBorderRadii, mBorderWidths, &innerRadii);
+  //gfxCornerSizes innerRadii;
+  MyInnerRadii(&mBorderRadii, mBorderWidths, &mInnerRadii);
 
   gfxRect strokeRect = mOuterRect;
   strokeRect.Deflate(gfxMargin(mBorderWidths[3] / 2.0, mBorderWidths[0] / 2.0,
@@ -2050,17 +2069,17 @@ nsCSSBorderRenderer::DrawNoCompositeColorSolidBorder()
 
       mContext->LineTo(outerCornerEnd);
 
-      p0.x = pci.x + cornerMults[i].a * innerRadii[c].width;
-      p0.y = pci.y + cornerMults[i].b * innerRadii[c].height;
+      p0.x = pci.x + cornerMults[i].a * mInnerRadii[c].width;
+      p0.y = pci.y + cornerMults[i].b * mInnerRadii[c].height;
 
-      p3i.x = pci.x + cornerMults[i3].a * innerRadii[c].width;
-      p3i.y = pci.y + cornerMults[i3].b * innerRadii[c].height;
+      p3i.x = pci.x + cornerMults[i3].a * mInnerRadii[c].width;
+      p3i.y = pci.y + cornerMults[i3].b * mInnerRadii[c].height;
 
-      p1.x = p0.x + alpha * cornerMults[i2].a * innerRadii[c].width;
-      p1.y = p0.y + alpha * cornerMults[i2].b * innerRadii[c].height;
+      p1.x = p0.x + alpha * cornerMults[i2].a * mInnerRadii[c].width;
+      p1.y = p0.y + alpha * cornerMults[i2].b * mInnerRadii[c].height;
 
-      p2.x = p3i.x - alpha * cornerMults[i3].a * innerRadii[c].width;
-      p2.y = p3i.y - alpha * cornerMults[i3].b * innerRadii[c].height;
+      p2.x = p3i.x - alpha * cornerMults[i3].a * mInnerRadii[c].width;
+      p2.y = p3i.y - alpha * cornerMults[i3].b * mInnerRadii[c].height;
       mContext->LineTo(p3i);
       mContext->CurveTo(p2, p1, p0);
       mContext->ClosePath();
