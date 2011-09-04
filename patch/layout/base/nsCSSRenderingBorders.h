@@ -95,6 +95,11 @@ typedef enum {
   BorderColorStyleDark
 } BorderColorStyle;
 
+struct DashGroup {
+  gfxFloat length;
+  gfxFloat gap;
+};
+
 struct nsCSSBorderRenderer {
   nsCSSBorderRenderer(PRInt32 aAppUnitsPerPixel,
                       gfxContext* aDestContext,
@@ -124,8 +129,15 @@ struct nsCSSBorderRenderer {
   gfxCornerSizes mBorderRadii;
   gfxCornerSizes mInnerRadii;
 
+
+  struct DashData {
+    gfxFloat gap;
+    gfxFloat offset;
+  };
+
   // global dashlength
   gfxFloat mDashLength;
+  DashData mDashData[4];
 
   // colors
   const nscolor* mBorderColors;
@@ -158,7 +170,7 @@ struct nsCSSBorderRenderer {
   //
 
   // add the path for drawing the given corner to the context
-  void DoCornerSubPath(mozilla::css::Corner aCorner,int pos);
+  void DoCornerSubPath(mozilla::css::Corner aCorner);
   // add the path for drawing the given side without any adjacent corners to the context
   void DoSideClipWithoutCornersSubPath(mozilla::css::Side aSide);
 
@@ -186,7 +198,7 @@ struct nsCSSBorderRenderer {
   // clip is needed if we can render the entire border in 1 or 2 passes.
   void FillSolidBorder(const gfxRect& aOuterRect,
                        const gfxRect& aInnerRect,
-                       gfxCornerSizes& aBorderRadii,
+                       const gfxCornerSizes& aBorderRadii,
                        const gfxFloat *aBorderSizes,
                        PRIntn aSides,
                        const gfxRGBA& aColor);
@@ -256,11 +268,6 @@ struct nsCSSBorderRenderer {
   static void ComputeInnerRadii(const gfxCornerSizes& aRadii,
                                 const gfxFloat *aBorderSizes,
                                 gfxCornerSizes *aInnerRadiiRet);
-
-  // utility function - modification of ComputeInnerRadii
-  void MyInnerRadii(gfxCornerSizes *aOuterRadiiRet,
-                    const gfxFloat *aBorderSizes,
-                    gfxCornerSizes *aInnerRadiiRet);
 };
 
 #ifdef DEBUG_NEW_BORDERS
