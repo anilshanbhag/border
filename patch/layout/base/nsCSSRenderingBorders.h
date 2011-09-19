@@ -95,6 +95,11 @@ typedef enum {
   BorderColorStyleDark
 } BorderColorStyle;
 
+struct DashGroup {
+  gfxFloat length;
+  gfxFloat gap;
+};
+
 struct nsCSSBorderRenderer {
   nsCSSBorderRenderer(PRInt32 aAppUnitsPerPixel,
                       gfxContext* aDestContext,
@@ -124,8 +129,20 @@ struct nsCSSBorderRenderer {
   gfxCornerSizes mBorderRadii;
   gfxCornerSizes mInnerRadii;
 
+
+  struct DashData {
+    gfxFloat gap;
+    gfxFloat offset;
+
+    // Check where to put this constructor
+    DashData () {
+      gap = 9999; dash = 9999;
+    }
+  };
+
   // global dashlength
   gfxFloat mDashLength;
+  DashData mDashData[4];
 
   // colors
   const nscolor* mBorderColors;
@@ -158,7 +175,7 @@ struct nsCSSBorderRenderer {
   //
 
   // add the path for drawing the given corner to the context
-  void DoCornerSubPath(mozilla::css::Corner aCorner,int pos);
+  void DoCornerSubPath(mozilla::css::Corner aCorner);
   // add the path for drawing the given side without any adjacent corners to the context
   void DoSideClipWithoutCornersSubPath(mozilla::css::Side aSide);
 
@@ -186,7 +203,7 @@ struct nsCSSBorderRenderer {
   // clip is needed if we can render the entire border in 1 or 2 passes.
   void FillSolidBorder(const gfxRect& aOuterRect,
                        const gfxRect& aInnerRect,
-                       gfxCornerSizes& aBorderRadii,
+                       const gfxCornerSizes& aBorderRadii,
                        const gfxFloat *aBorderSizes,
                        PRIntn aSides,
                        const gfxRGBA& aColor);
@@ -209,20 +226,21 @@ struct nsCSSBorderRenderer {
   void DrawDashedSide (mozilla::css::Side aSide);
 
   // calculate the gap length of a side
-  gfxFloat CalculateGaps(mozilla::css::Side aSide, gfxFloat& dashLength, gfxFloat *offset);
+  gfxFloat CalculateGaps (mozilla::css::Side aSide, gfxFloat& dashLength, gfxFloat *offset);
 
   // calculate the curved length along a corner section
-  gfxFloat ComputeCurvedLength(mozilla::css::Side side, mozilla::css::Corner corner);
+  gfxFloat ComputeCurvedLength (mozilla::css::Side side, mozilla::css::Corner corner);
+
+  void SetCornerColor(mozilla::css::Corner aCorner);
 
   // draw dashed corner
-  void DrawDashedCorner(mozilla::css::Corner aCorner, gfxFloat& dash,
-                        gfxFloat& gap, int direction, bool solid=false);
+  void DrawDashedCorner (mozilla::css::Corner aCorner);
 
   // draw dashed corner - used when corner is split
-  void DrawSolidCorner(mozilla::css::Corner aCorner, int dir);
+  void DrawSolidCorner (mozilla::css::Corner aCorner);
 
   // Setup the stroke style for a given side
-  void SetupStrokeStyle(mozilla::css::Side aSize);
+  void SetupStrokeStyle (mozilla::css::Side aSize);
 
   // Analyze if all border sides have the same width.
   bool AllBordersSameWidth();
@@ -256,11 +274,6 @@ struct nsCSSBorderRenderer {
   static void ComputeInnerRadii(const gfxCornerSizes& aRadii,
                                 const gfxFloat *aBorderSizes,
                                 gfxCornerSizes *aInnerRadiiRet);
-
-  // utility function - modification of ComputeInnerRadii
-  void MyInnerRadii(gfxCornerSizes *aOuterRadiiRet,
-                    const gfxFloat *aBorderSizes,
-                    gfxCornerSizes *aInnerRadiiRet);
 };
 
 #ifdef DEBUG_NEW_BORDERS
