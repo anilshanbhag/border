@@ -133,6 +133,11 @@ struct nsCSSBorderRenderer {
   struct DashData {
     gfxFloat gap;
     gfxFloat offset;
+
+    // Check where to put this constructor
+    DashData () {
+      gap = 9999; dash = 9999;
+    }
   };
 
   // global dashlength
@@ -221,20 +226,21 @@ struct nsCSSBorderRenderer {
   void DrawDashedSide (mozilla::css::Side aSide);
 
   // calculate the gap length of a side
-  gfxFloat CalculateGaps(mozilla::css::Side aSide, gfxFloat& dashLength, gfxFloat *offset);
+  gfxFloat CalculateGaps (mozilla::css::Side aSide, gfxFloat& dashLength, gfxFloat *offset);
 
   // calculate the curved length along a corner section
-  gfxFloat ComputeCurvedLength(mozilla::css::Side side, mozilla::css::Corner corner);
+  gfxFloat ComputeCurvedLength (mozilla::css::Side side, mozilla::css::Corner corner);
+
+  void SetCornerColor(mozilla::css::Corner aCorner);
 
   // draw dashed corner
-  void DrawDashedCorner(mozilla::css::Corner aCorner, gfxFloat& dash,
-                        gfxFloat& gap, int direction, bool solid=false);
+  void DrawDashedCorner (mozilla::css::Corner aCorner);
 
   // draw dashed corner - used when corner is split
-  void DrawSolidCorner(mozilla::css::Corner aCorner, int dir);
+  void DrawSolidCorner (mozilla::css::Corner aCorner);
 
   // Setup the stroke style for a given side
-  void SetupStrokeStyle(mozilla::css::Side aSize);
+  void SetupStrokeStyle (mozilla::css::Side aSize);
 
   // Analyze if all border sides have the same width.
   bool AllBordersSameWidth();
