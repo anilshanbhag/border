@@ -1277,27 +1277,51 @@ bool IsVisible(int aStyle)
 }
 
 void
-nsCSSBorderRenderer::DrawDashedCorner(mozilla::css::Corner aCorner,
-                                      gfxFloat& dash,
-                                      gfxFloat& gap,
-                                      int dir,
-                                      bool isSolid)
+nsCSSBorderRenderer::SetColor(mozilla::css::Corner aCorner)
+{
+  int i = aCorner;
+  mozilla::css::Corner c = mozilla::css::Corner((i+1) % 4);
+  int i1 = (i+1) % 4;
+  int i2 = (i+2) % 4;
+
+  nscolor firstColor, secondColor;
+  if (IsVisible(mBorderStyles[i]) && IsVisible(mBorderStyles[i1])) {
+    firstColor = mBorderColors[i];
+    secondColor = mBorderColors[i1];
+  } else if (IsVisible(mBorderStyles[i])) {
+    firstColor = mBorderColors[i];
+    secondColor = mBorderColors[i];
+  } else {
+    firstColor = mBorderColors[i1];
+    secondColor = mBorderColors[i1];
+  }
+
+  if (firstColor != secondColor) {
+    nsRefPtr<gfxPattern> pattern =
+      CreateCornerGradient(c, firstColor, secondColor);
+    mContext->SetPattern(pattern);
+  } else {
+    mContext->SetColor(firstColor);
+  }
+}
+
+void
+nsCSSBorderRenderer::DrawDashedCorner(mozilla::css::Corner aCorner)
 {
   /**
    * Move along the inner curve .
-   * Draw half a dash first ,
-   * then draw gap, dash till we reach endAngle
+   * For every corner move over inner curve in anti clockwise dir
    * @param aCorner - the corner
-   * @param dash - dash length
-   * @param gap - gap length
-   * @param dir - direction to move from the middle point chosen
-   * dir == 1 => anti-clockwise dir==1=> clockwise
    */
 
   gfxPoint corner = mOuterRect.TopLeft();
   const gfxFloat pi = 3.14159265, delta = 0.1*pi/180;
-  gfxFloat combinedSize, start, endAngle, calcAngle, r, R, k,
+  gfxFloat dash, gap,
+           combinedSize, startAngle, endAngle, demarc, r, R, k,
            iPrevious, iCurrent, oPrevious, oCurrent, curlen, oStep, iStep;
+
+  dash = mDashLength;
+  gap = mDashData[aCorner].gap;
 
   // maintain flag to know when to exit loop
   bool flag = false;
@@ -1311,6 +1335,8 @@ nsCSSBorderRenderer::DrawDashedCorner(mozilla::css::Corner aCorner,
 
   // Shape of the inner curve - to know if major axis on x axis or not
   if (iCurve[1] > iCurve[0]) shape = 1;
+
+  // Shift to corner with cartesian co-od system
 
   if (aCorner == NS_CORNER_TOP_LEFT) {
     corner.x += mBorderCornerDimensions[C_TL].width;
@@ -1326,10 +1352,10 @@ nsCSSBorderRenderer::DrawDashedCorner(mozilla::css::Corner aCorner,
     corner.y += mOuterRect.height - mBorderCornerDimensions[C_BL].height;
   }
 
-  // Move to corner and flip the y axis
   mContext->Save();
   mContext->Translate(corner);
   mContext->Scale(1.0,-1.0);
+
 
   int side = aCorner,
       sidePrev = (side + 3)%4;
@@ -1338,26 +1364,29 @@ nsCSSBorderRenderer::DrawDashedCorner(mozilla::css::Corner aCorner,
 
   // The start angle in the quadrant [ 0, pi/2 ]
   // Consider adding 2*delta offset = 0.2 deg to get corner sections joined
-  start = mBorderWidths[side]/combinedSize * pi/2 - 2*dir*delta;
+
+  demarc = mBorderWidths[side]/combinedSize * pi/2 ;
 
   endAngle = (6 - aCorner)%4 * pi/2;
   if (endAngle == 0) endAngle = 2*pi ;
 
+/*
+  Remains of Split Code : For memories :P
+  calcAngle is now startAngle
   if (dir == 1){
     calcAngle = endAngle - pi/2;
   } else {
     endAngle -= pi/2;
     calcAngle = endAngle;
   }
+*/
+  startAngle = endAngle - pi/2;
+
+  demarc =  startAngle + ParamToAbs(demarc , iCurve[(aCorner + 1)%2], iCurve[aCorner%2]);
 
   // prefix i for variables for inner curve , o for outer curve
-  iCurrent =  calcAngle + ParamToAbs(start, iCurve[(aCorner + 1)%2], iCurve[aCorner%2]);
-  iPrevious = iCurrent;
-
-  oCurrent = calcAngle + OIntersect(iCurrent - calcAngle,
-                                    iCurve[(aCorner + 1)%2], iCurve[aCorner%2],
-                                    oCurve[(aCorner + 1)%2], oCurve[aCorner%2]);
-  oPrevious = oCurrent;
+  iCurrent = startAngle; iPrevious = iCurrent;
+  oCurrent = startAngle; oPrevious = oCurrent;
 
   R = iCurve[0];
   r = iCurve[1];
@@ -1369,16 +1398,16 @@ nsCSSBorderRenderer::DrawDashedCorner(mozilla::css::Corner aCorner,
 
   curlen = 0.0;
 
-  while (curlen < dash/2 && dir*iCurrent <= dir*endAngle ){
-    iCurrent += dir*delta;
+  while (curlen < dash/2 && iCurrent <= endAngle ){
+    iCurrent += delta;
     curlen = R * EllipseE(k, iCurrent, iPrevious, shape);
   }
 
-  if (dir*iCurrent >= dir*endAngle) {
+  if (iCurrent >= endAngle) {
     flag = true; iCurrent = endAngle;
   }
 
-  oCurrent = calcAngle + OIntersect(iCurrent - calcAngle,
+  oCurrent = startAngle + OIntersect(iCurrent - startAngle,
                                     iCurve[(aCorner + 1)%2], iCurve[aCorner%2],
                                     oCurve[(aCorner + 1)%2], oCurve[aCorner%2]);
 
@@ -1400,44 +1429,40 @@ nsCSSBorderRenderer::DrawDashedCorner(mozilla::css::Corner aCorner,
 
   mContext->ClosePath();
 
-  nscolor borderColor = (dir == 1)? mBorderColors[sidePrev] : mBorderColors[side];
-  mContext->SetColor(gfxRGBA(borderColor));
-
-  mContext->Fill();
+  // nscolor borderColor = (dir == 1)? mBorderColors[sidePrev] : mBorderColors[side];
 
   oPrevious = oCurrent;
   iPrevious = iCurrent;
   curlen = 0.0;
 
-  if (flag){
-      mContext->Restore();
-      return;
-  }
-
-  while (1){
-    while (curlen < gap){
-      iCurrent += dir*delta;
+  while (!flag) {
+    while (curlen < gap) {
+      iCurrent += delta;
       curlen = R * EllipseE(k, iCurrent, iPrevious, shape);
     }
-    oCurrent = calcAngle + OIntersect(iCurrent - calcAngle,
+    oCurrent = startAngle + OIntersect(iCurrent - startAngle,
                                   iCurve[(aCorner + 1)%2], iCurve[aCorner%2],
                                   oCurve[(aCorner + 1)%2], oCurve[aCorner%2]);
     oPrevious = oCurrent;
     iPrevious = iCurrent;
     curlen = 0.0;
 
-    if (dir*iCurrent >= dir*endAngle) break;
+    if (iCurrent >= endAngle) {
+      flag = true;
+      break;
+    }
 
     while (curlen < dash){
-      iCurrent += dir*delta;
+      iCurrent += delta;
       curlen = R * EllipseE(k, iCurrent, iPrevious, shape);
     }
 
-    if (dir*iCurrent >= dir*endAngle) {
-      flag = 1; iCurrent = endAngle;
+    if (iCurrent >= endAngle) {
+      flag = true;
+      iCurrent = endAngle;
     }
 
-    oCurrent = calcAngle + OIntersect(iCurrent - calcAngle,
+    oCurrent = startAngle + OIntersect(iCurrent - startAngle,
                                       iCurve[(aCorner + 1)%2], iCurve[aCorner%2],
                                       oCurve[(aCorner + 1)%2], oCurve[aCorner%2]);
 
@@ -1460,26 +1485,25 @@ nsCSSBorderRenderer::DrawDashedCorner(mozilla::css::Corner aCorner,
     mContext->ClosePath();
     mContext->Fill();
 
-    if (flag) break;
-
     iPrevious = iCurrent;
     curlen = 0.0;
   }
+
+  SetCornerColor(aCorner);
+  mContext->Fill();
 
   mContext->Restore();
 
 }
 
 void
-nsCSSBorderRenderer::DrawSolidCorner(mozilla::css::Corner aCorner,
-                                     int dir)
+nsCSSBorderRenderer::DrawSolidCorner(mozilla::css::Corner aCorner)
 {
   /**
    * This draws the corner [with atleast one innerRadii 0]
    * In the general case it involves drawing a section with 5 points
    * with a curve between two of the points
    * @param aCorner - corner to be drawn
-   * @param dir - direction to move from center -1 => clockwise 1 => antiC
    */
 
   const gfxFloat alpha = 0.55191497064665766025;
@@ -1488,18 +1512,17 @@ nsCSSBorderRenderer::DrawSolidCorner(mozilla::css::Corner aCorner,
                                       {  0, -1 },
                                       { +1,  0 },
                                       {  0, +1 } };
-
+/*
   const twoFloats centerAdjusts[4] = { { 0, +0.5 },
                                         { -0.5, 0 },
                                         { 0, -0.5 },
                                         { +0.5, 0 } };
-
+*/
   gfxPoint pc, pci, p0, p1, p2, p3, pd, p3i;
 
     // the corner index -- either 1 2 3 0 (cw) or 0 3 2 1 (ccw)
   int i = aCorner;
   mozilla::css::Corner c = mozilla::css::Corner((i+1) % 4);
-  mozilla::css::Corner prevCorner = mozilla::css::Corner(i);
 
   // i+2 and i+3 respectively.  These are used to index into the corner
   // multiplier table, and were deduced by calculating out the long form
@@ -1511,25 +1534,7 @@ nsCSSBorderRenderer::DrawSolidCorner(mozilla::css::Corner aCorner,
   pc = mOuterRect.AtCorner(c);
   pci = mInnerRect.AtCorner(c);
 
-  nscolor firstColor, secondColor;
-  if (IsVisible(mBorderStyles[i]) && IsVisible(mBorderStyles[i1])) {
-    firstColor = mBorderColors[i];
-    secondColor = mBorderColors[i1];
-  } else if (IsVisible(mBorderStyles[i])) {
-    firstColor = mBorderColors[i];
-    secondColor = mBorderColors[i];
-  } else {
-    firstColor = mBorderColors[i1];
-    secondColor = mBorderColors[i1];
-  }
-
-  if (firstColor != secondColor) {
-    nsRefPtr<gfxPattern> pattern =
-      CreateCornerGradient(c, firstColor, secondColor);
-    mContext->SetPattern(pattern);
-  } else {
-    mContext->SetColor(firstColor);
-  }
+  SetCornerColor(aCorner);
 
   if (mBorderRadii[c].width > 0 && mBorderRadii[c].height > 0) {
     p0.x = pc.x + cornerMults[i].a * mBorderRadii[c].width;
@@ -1795,8 +1800,6 @@ nsCSSBorderRenderer::DrawSingleWidthSolidBorder()
 void
 nsCSSBorderRenderer::DrawNoCompositeColorSolidBorder()
 {
-  const gfxFloat alpha = 0.55191497064665766025;
-
   const twoFloats cornerMults[4] = { { -1,  0 },
                                       {  0, -1 },
                                       { +1,  0 },
@@ -1823,7 +1826,6 @@ nsCSSBorderRenderer::DrawNoCompositeColorSolidBorder()
     // of each corner and finding a pattern in the signs and values.
     int i1 = (i+1) % 4;
     int i2 = (i+2) % 4;
-    int i3 = (i+3) % 4;
 
     pc = mOuterRect.AtCorner(c);
     pci = mInnerRect.AtCorner(c);
@@ -1863,7 +1865,7 @@ nsCSSBorderRenderer::DrawNoCompositeColorSolidBorder()
     mContext->SetColor(gfxRGBA(mBorderColors[i]));
     mContext->Stroke();
 
-    DrawSolidCorner(prevCorner,1);
+    DrawSolidCorner(prevCorner);
   }
 }
 
@@ -2208,45 +2210,7 @@ nsCSSBorderRenderer::DrawBorders()
           IsZeroSize(mBorderRadii[corner]) &&
           IsSolidCornerStyle(mBorderStyles[sides[0]], corner))
       {
-        nscolor firstColor, secondColor;
-        int i1 = (corner + 1) % 4;
-
-        if (IsVisible(mBorderStyles[corner]) && IsVisible(mBorderStyles[i1])) {
-          firstColor = mBorderColors[corner];
-          secondColor = mBorderColors[i1];
-        } else if (IsVisible(mBorderStyles[corner])) {
-          firstColor = mBorderColors[corner];
-          secondColor = mBorderColors[corner];
-        } else {
-          firstColor = mBorderColors[i1];
-          secondColor = mBorderColors[i1];
-        }
-
-        mozilla::css::Corner c = mozilla::css::Corner(i1 % 4);
-
-        if (firstColor != secondColor) {
-          nsRefPtr<gfxPattern> pattern =
-            CreateCornerGradient(c, firstColor, secondColor);
-          mContext->SetPattern(pattern);
-        } else {
-          mContext->SetColor(firstColor);
-        }
-
-        mContext->NewPath();
-        DoCornerSubPath(corner);
-        mContext->Fill();
-        continue;
-      }
-
-      if ((mBorderStyles[sides[0]] == NS_STYLE_BORDER_STYLE_DASHED &&
-           mBorderStyles[sides[1]] == NS_STYLE_BORDER_STYLE_DASHED) ||
-         (mBorderStyles[sides[0]] == NS_STYLE_BORDER_STYLE_DASHED &&
-          (mBorderStyles[sides[1]] == NS_STYLE_BORDER_STYLE_SOLID ||
-           mBorderStyles[sides[1]] == NS_STYLE_BORDER_STYLE_DOTTED) ) ||
-         (mBorderStyles[sides[1]] == NS_STYLE_BORDER_STYLE_DASHED &&
-          (mBorderStyles[sides[0]] == NS_STYLE_BORDER_STYLE_SOLID ||
-           mBorderStyles[sides[0]] == NS_STYLE_BORDER_STYLE_DOTTED) )){
-        continue;
+        DrawSolidCorner(corner);
       }
 
       mContext->Save();
@@ -2256,10 +2220,22 @@ nsCSSBorderRenderer::DrawBorders()
       DoCornerSubPath(corner);
       mContext->Clip();
 
+      /**
+      * There needs a branch to drawdashedcorner
+      * IF one of the two sides if dashed and simplecornerstyle
+      */
+
       if (simpleCornerStyle) {
         // we don't need a group for this corner, the sides are the same,
         // but we weren't able to render just a solid block for the corner.
-        DrawBorderSides(sideBits);
+
+        if(mBorderStyles[sides[0]] == NS_STYLE_BORDER_STYLE_DASHED ||
+           mBorderStyles[sides[0]] == NS_STYLE_BORDER_STYLE_DASHED) {
+          DrawDashedCorner(corner);
+        } else {
+          DrawBorderSides(sideBits);
+        }
+
       } else {
         // Sides are different.  We need to draw using OPERATOR_ADD to
         // get correct color blending behaviour at the seam.  We need
