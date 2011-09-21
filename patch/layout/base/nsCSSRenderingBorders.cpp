@@ -1277,17 +1277,16 @@ bool IsVisible(int aStyle)
 }
 
 void
-nsCSSBorderRenderer::SetColor(mozilla::css::Corner aCorner)
+nsCSSBorderRenderer::SetCornerColor(mozilla::css::Corner aCorner)
 {
   int i = aCorner;
-  mozilla::css::Corner c = mozilla::css::Corner((i+1) % 4);
-  int i1 = (i+1) % 4;
-  int i2 = (i+2) % 4;
+  mozilla::css::Corner c = mozilla::css::Corner((i+3) % 4);
+  int i1 = (i+3) % 4;
 
   nscolor firstColor, secondColor;
   if (IsVisible(mBorderStyles[i]) && IsVisible(mBorderStyles[i1])) {
-    firstColor = mBorderColors[i];
-    secondColor = mBorderColors[i1];
+    firstColor = mBorderColors[i1];
+    secondColor = mBorderColors[i];
   } else if (IsVisible(mBorderStyles[i])) {
     firstColor = mBorderColors[i];
     secondColor = mBorderColors[i];
@@ -1298,11 +1297,25 @@ nsCSSBorderRenderer::SetColor(mozilla::css::Corner aCorner)
 
   if (firstColor != secondColor) {
     nsRefPtr<gfxPattern> pattern =
-      CreateCornerGradient(c, firstColor, secondColor);
+      CreateCornerGradient(aCorner, firstColor, secondColor);
     mContext->SetPattern(pattern);
   } else {
     mContext->SetColor(firstColor);
   }
+}
+
+gfxFloat
+getEndOfDash(gfxFloat len, gfxFloat start, gfxFloat k, gfxFloat R, gfxFloat endAngle, int shape)
+{
+  gfxFloat curlen = 0.0, current = start;
+  static const gfxFloat pi = 3.14159265, delta = 0.1*pi/180;
+
+  while (curlen < len && current <= endAngle ){
+    current += delta;
+    curlen = R * EllipseE(k, current, start, shape);
+  }
+
+  return current;
 }
 
 void
@@ -1315,16 +1328,17 @@ nsCSSBorderRenderer::DrawDashedCorner(mozilla::css::Corner aCorner)
    */
 
   gfxPoint corner = mOuterRect.TopLeft();
-  const gfxFloat pi = 3.14159265, delta = 0.1*pi/180;
+  static const gfxFloat pi = 3.14159265, delta = 0.1*pi/180;
   gfxFloat dash, gap,
-           combinedSize, startAngle, endAngle, demarc, r, R, k,
+           combinedSize, startAngle, endAngle, demarc, r, R, k, offset,
            iPrevious, iCurrent, oPrevious, oCurrent, curlen, oStep, iStep;
 
   dash = mDashLength;
   gap = mDashData[aCorner].gap;
 
   // maintain flag to know when to exit loop
-  bool flag = false;
+  // maintain halfFlag to know when we cross over half section
+  bool flag = false, halfFlag = true;
 
   int shape = 0;
 
@@ -1380,6 +1394,7 @@ nsCSSBorderRenderer::DrawDashedCorner(mozilla::css::Corner aCorner)
     calcAngle = endAngle;
   }
 */
+
   startAngle = endAngle - pi/2;
 
   demarc =  startAngle + ParamToAbs(demarc , iCurve[(aCorner + 1)%2], iCurve[aCorner%2]);
@@ -1398,13 +1413,30 @@ nsCSSBorderRenderer::DrawDashedCorner(mozilla::css::Corner aCorner)
 
   curlen = 0.0;
 
-  while (curlen < dash/2 && iCurrent <= endAngle ){
-    iCurrent += delta;
-    curlen = R * EllipseE(k, iCurrent, iPrevious, shape);
+  // Since there exists a demarcation we must move till point where
+  // demarcation and then change the dash gap
+  // TODO :: Change the initial length case for dash / gap
+
+  //iCurrent = getEndOfDash(gfxFloat dash/2, gfxFloat iPrevious, gfxFloat k, gfxFloat endAngle, int shape)
+
+  mContext->NewPath();
+
+  offset = mDashData[aCorner].offset - floor(mDashData[aCorner].offset / (dash + gap)) * (dash + gap);
+
+  if(offset <= dash) {
+    iCurrent = getEndOfDash(offset, iPrevious, k, R, endAngle, shape);
+  } else {
+    iCurrent = getEndOfDash(dash, iPrevious, k, R, endAngle, shape);
+  }
+
+  if (halfFlag && iCurrent >= demarc) {
+    halfFlag = false;
+    gap = mDashData[sidePrev].gap;
   }
 
   if (iCurrent >= endAngle) {
-    flag = true; iCurrent = endAngle;
+    flag = true;
+    iCurrent = endAngle;
   }
 
   oCurrent = startAngle + OIntersect(iCurrent - startAngle,
@@ -1414,7 +1446,6 @@ nsCSSBorderRenderer::DrawDashedCorner(mozilla::css::Corner aCorner)
   oStep = (oCurrent - oPrevious)/30;
   iStep = (iCurrent - iPrevious)/30;
 
-  mContext->NewPath();
   mContext->MoveTo(gfxPoint(oCurve[0] * cos(oPrevious), oCurve[1] * sin(oPrevious)));
 
   for(int i=1;i<31;i++)
@@ -1428,18 +1459,14 @@ nsCSSBorderRenderer::DrawDashedCorner(mozilla::css::Corner aCorner)
                      iCurve[1] * sin(iCurrent - iStep*i)));
 
   mContext->ClosePath();
+  mContext->Fill();
 
-  // nscolor borderColor = (dir == 1)? mBorderColors[sidePrev] : mBorderColors[side];
-
-  oPrevious = oCurrent;
   iPrevious = iCurrent;
   curlen = 0.0;
 
   while (!flag) {
-    while (curlen < gap) {
-      iCurrent += delta;
-      curlen = R * EllipseE(k, iCurrent, iPrevious, shape);
-    }
+    iCurrent = getEndOfDash(gap, iPrevious, k, R, endAngle, shape);
+
     oCurrent = startAngle + OIntersect(iCurrent - startAngle,
                                   iCurve[(aCorner + 1)%2], iCurve[aCorner%2],
                                   oCurve[(aCorner + 1)%2], oCurve[aCorner%2]);
@@ -1452,9 +1479,11 @@ nsCSSBorderRenderer::DrawDashedCorner(mozilla::css::Corner aCorner)
       break;
     }
 
-    while (curlen < dash){
-      iCurrent += delta;
-      curlen = R * EllipseE(k, iCurrent, iPrevious, shape);
+    iCurrent = getEndOfDash(dash, iPrevious, k, R, endAngle, shape);
+
+    if (halfFlag && iCurrent >= demarc) {
+      halfFlag = false;
+      gap = mDashData[sidePrev].gap;
     }
 
     if (iCurrent >= endAngle) {
@@ -1469,7 +1498,6 @@ nsCSSBorderRenderer::DrawDashedCorner(mozilla::css::Corner aCorner)
     oStep = (oCurrent - oPrevious)/30;
     iStep = (iCurrent - iPrevious)/30;
 
-    mContext->NewPath();
     mContext->MoveTo(gfxPoint(oCurve[0] * cos(oPrevious), oCurve[1] * sin(oPrevious)));
 
     for(int i=1;i<31;i++)
@@ -1488,12 +1516,10 @@ nsCSSBorderRenderer::DrawDashedCorner(mozilla::css::Corner aCorner)
     iPrevious = iCurrent;
     curlen = 0.0;
   }
+  mContext->Restore();
 
   SetCornerColor(aCorner);
   mContext->Fill();
-
-  mContext->Restore();
-
 }
 
 void
@@ -1512,17 +1538,11 @@ nsCSSBorderRenderer::DrawSolidCorner(mozilla::css::Corner aCorner)
                                       {  0, -1 },
                                       { +1,  0 },
                                       {  0, +1 } };
-/*
-  const twoFloats centerAdjusts[4] = { { 0, +0.5 },
-                                        { -0.5, 0 },
-                                        { 0, -0.5 },
-                                        { +0.5, 0 } };
-*/
+
   gfxPoint pc, pci, p0, p1, p2, p3, pd, p3i;
 
-    // the corner index -- either 1 2 3 0 (cw) or 0 3 2 1 (ccw)
-  int i = aCorner;
-  mozilla::css::Corner c = mozilla::css::Corner((i+1) % 4);
+  // the corner index -- either 1 2 3 0 (cw) or 0 3 2 1 (ccw)
+  int i = (aCorner + 3)%4;
 
   // i+2 and i+3 respectively.  These are used to index into the corner
   // multiplier table, and were deduced by calculating out the long form
@@ -1531,10 +1551,10 @@ nsCSSBorderRenderer::DrawSolidCorner(mozilla::css::Corner aCorner)
   int i2 = (i+2) % 4;
   int i3 = (i+3) % 4;
 
+  mozilla::css::Corner c = aCorner;
+
   pc = mOuterRect.AtCorner(c);
   pci = mInnerRect.AtCorner(c);
-
-  SetCornerColor(aCorner);
 
   if (mBorderRadii[c].width > 0 && mBorderRadii[c].height > 0) {
     p0.x = pc.x + cornerMults[i].a * mBorderRadii[c].width;
@@ -1580,7 +1600,6 @@ nsCSSBorderRenderer::DrawSolidCorner(mozilla::css::Corner aCorner)
     mContext->LineTo(p3i);
     mContext->CurveTo(p2, p1, p0);
     mContext->ClosePath();
-    mContext->Fill();
   } else {
     gfxPoint c1, c2, c3, c4;
 
@@ -1596,9 +1615,11 @@ nsCSSBorderRenderer::DrawSolidCorner(mozilla::css::Corner aCorner)
     mContext->LineTo(c3);
     mContext->LineTo(pci);
     mContext->ClosePath();
-
-    mContext->Fill();
   }
+
+  SetCornerColor(aCorner);
+  mContext->Fill();
+
 }
 
 void
@@ -1830,18 +1851,6 @@ nsCSSBorderRenderer::DrawNoCompositeColorSolidBorder()
     pc = mOuterRect.AtCorner(c);
     pci = mInnerRect.AtCorner(c);
     mContext->SetLineWidth(mBorderWidths[i]);
-
-    nscolor firstColor, secondColor;
-    if (IsVisible(mBorderStyles[i]) && IsVisible(mBorderStyles[i1])) {
-      firstColor = mBorderColors[i];
-      secondColor = mBorderColors[i1];
-    } else if (IsVisible(mBorderStyles[i])) {
-      firstColor = mBorderColors[i];
-      secondColor = mBorderColors[i];
-    } else {
-      firstColor = mBorderColors[i1];
-      secondColor = mBorderColors[i1];
-    }
 
     mContext->NewPath();
 
@@ -2229,13 +2238,18 @@ nsCSSBorderRenderer::DrawBorders()
         // we don't need a group for this corner, the sides are the same,
         // but we weren't able to render just a solid block for the corner.
 
-        if(mBorderStyles[sides[0]] == NS_STYLE_BORDER_STYLE_DASHED ||
-           mBorderStyles[sides[0]] == NS_STYLE_BORDER_STYLE_DASHED) {
+        if(mBorderStyles[sides[0]] == NS_STYLE_BORDER_STYLE_DASHED &&
+           mBorderStyles[sides[0]] == NS_STYLE_BORDER_STYLE_DASHED &&
+           mInnerRadii[corner].width && mInnerRadii[corner].height) {
           DrawDashedCorner(corner);
         } else {
           DrawBorderSides(sideBits);
         }
 
+      } else if (mBorderStyles[sides[0]] == NS_STYLE_BORDER_STYLE_DASHED &&
+           mBorderStyles[sides[0]] == NS_STYLE_BORDER_STYLE_DASHED &&
+           mInnerRadii[corner].width && mInnerRadii[corner].height) {
+          DrawDashedCorner(corner);
       } else {
         // Sides are different.  We need to draw using OPERATOR_ADD to
         // get correct color blending behaviour at the seam.  We need
@@ -2250,22 +2264,22 @@ nsCSSBorderRenderer::DrawBorders()
         mContext->PushGroup(gfxASurface::CONTENT_COLOR_ALPHA);
         mContext->SetOperator(gfxContext::OPERATOR_ADD);
 
-        for (int cornerSide = 0; cornerSide < 2; cornerSide++) {
-          mozilla::css::Side side = mozilla::css::Side(sides[cornerSide]);
-          PRUint8 style = mBorderStyles[side];
+          for (int cornerSide = 0; cornerSide < 2; cornerSide++) {
+            mozilla::css::Side side = mozilla::css::Side(sides[cornerSide]);
+            PRUint8 style = mBorderStyles[side];
 
-          SF("corner: %d cornerSide: %d side: %d style: %d\n", corner, cornerSide, side, style);
+            SF("corner: %d cornerSide: %d side: %d style: %d\n", corner, cornerSide, side, style);
 
-          mContext->Save();
+            mContext->Save();
 
-          mContext->NewPath();
-          DoSideClipSubPath(side);
-          mContext->Clip();
+            mContext->NewPath();
+            DoSideClipSubPath(side);
+            mContext->Clip();
 
-          DrawBorderSides(1 << side);
+            DrawBorderSides(1 << side);
 
-          mContext->Restore();
-        }
+            mContext->Restore();
+          }
 
         mContext->PopGroupToSource();
         mContext->SetOperator(gfxContext::OPERATOR_OVER);

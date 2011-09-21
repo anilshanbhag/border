@@ -135,9 +135,7 @@ struct nsCSSBorderRenderer {
     gfxFloat offset;
 
     // Check where to put this constructor
-    DashData () {
-      gap = 9999; dash = 9999;
-    }
+    DashData (gfxFloat ga = 9999,gfxFloat off = 0):gap(ga),offset(off) {}
   };
 
   // global dashlength
