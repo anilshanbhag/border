@@ -95,11 +95,6 @@ typedef enum {
   BorderColorStyleDark
 } BorderColorStyle;
 
-struct DashGroup {
-  gfxFloat length;
-  gfxFloat gap;
-};
-
 struct nsCSSBorderRenderer {
   nsCSSBorderRenderer(PRInt32 aAppUnitsPerPixel,
                       gfxContext* aDestContext,
@@ -232,13 +227,13 @@ struct nsCSSBorderRenderer {
   void SetCornerColor(mozilla::css::Corner aCorner);
 
   // draw dashed corner
-  void DrawDashedCorner (mozilla::css::Corner aCorner);
+  void DrawDashedCorner(mozilla::css::Corner aCorner);
 
   // draw dashed corner - used when corner is split
-  void DrawSolidCorner (mozilla::css::Corner aCorner);
+  void DrawSolidCorner(mozilla::css::Corner aCorner);
 
   // Setup the stroke style for a given side
-  void SetupStrokeStyle (mozilla::css::Side aSize);
+  void SetupStrokeStyle(mozilla::css::Side aSize);
 
   // Analyze if all border sides have the same width.
   bool AllBordersSameWidth();

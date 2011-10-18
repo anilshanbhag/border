@@ -204,8 +204,8 @@ nsCSSBorderRenderer::nsCSSBorderRenderer(PRInt32 aAppUnitsPerPixel,
 
 /* static */ void
 nsCSSBorderRenderer::ComputeInnerRadii(const gfxCornerSizes& aRadii,
-                                      const gfxFloat *aBorderSizes,
-                                      gfxCornerSizes *aInnerRadiiRet)
+                                       const gfxFloat *aBorderSizes,
+                                       gfxCornerSizes *aInnerRadiiRet)
 {
   gfxCornerSizes& iRadii = *aInnerRadiiRet;
 
@@ -541,7 +541,7 @@ nsCSSBorderRenderer::FillSolidBorder(const gfxRect& aOuterRect,
   // If we have a border radius, do full rounded rectangles
   // and fill, regardless of what sides we're asked to draw.
   if (!AllCornersZeroSize(aBorderRadii)) {
-    ComputeInnerRadii(aBorderRadii,aBorderSizes,&mInnerRadii);
+    ComputeInnerRadii(aBorderRadii, aBorderSizes, &mInnerRadii);
 
     mContext->NewPath();
 
@@ -1541,9 +1541,9 @@ nsCSSBorderRenderer::DrawSolidCorner(mozilla::css::Corner aCorner)
   const gfxFloat alpha = 0.55191497064665766025;
 
   const twoFloats cornerMults[4] = { { -1,  0 },
-                                      {  0, -1 },
-                                      { +1,  0 },
-                                      {  0, +1 } };
+                                     {  0, -1 },
+                                     { +1,  0 },
+                                     {  0, +1 } };
 
   gfxPoint pc, pci, p0, p1, p2, p3, pd, p3i;
 
@@ -2210,11 +2210,6 @@ nsCSSBorderRenderer::DrawBorders()
 
       const PRIntn sides[2] = { corner, PREV_SIDE(corner) };
       PRIntn sideBits = (1 << sides[0]) | (1 << sides[1]);
-
-      PRBool simpleCornerStyle = mCompositeColors[sides[0]] == NULL &&
-                                 mCompositeColors[sides[1]] == NULL &&
-                                 AreBorderSideFinalStylesSame(sideBits);
-
       PRBool noCompositeColorCorner = mCompositeColors[sides[0]] == NULL &&
                                       mCompositeColors[sides[1]] == NULL;
 
@@ -2226,6 +2221,7 @@ nsCSSBorderRenderer::DrawBorders()
           IsSolidCornerStyle(mBorderStyles[sides[0]], corner))
       {
         DrawSolidCorner(corner);
+        continue;
       }
 
       mContext->Save();
@@ -2235,25 +2231,24 @@ nsCSSBorderRenderer::DrawBorders()
       DoCornerSubPath(corner);
       mContext->Clip();
 
-      /**
-      * There needs a branch to drawdashedcorner
-      * IF one of the two sides if dashed and simplecornerstyle
-      */
+      
+      // There needs a branch to drawdashedcorner
+      // IF one of the two sides if dashed and simplecornerstyle
 
-      if (simpleCornerStyle) {
+      if (noCompositeColorCorner &&
+          AreBorderSideFinalStylesSame(sideBits)) {
         // we don't need a group for this corner, the sides are the same,
         // but we weren't able to render just a solid block for the corner.
 
-        if(mBorderStyles[sides[0]] == NS_STYLE_BORDER_STYLE_DASHED &&
-           mBorderStyles[sides[0]] == NS_STYLE_BORDER_STYLE_DASHED &&
-           mInnerRadii[corner].width && mInnerRadii[corner].height) {
+        if(mBorderStyles[sides[0]] == NS_STYLE_BORDER_STYLE_DASHED ||
+            mInnerRadii[corner].width && mInnerRadii[corner].height) {
           DrawDashedCorner(corner);
         } else {
           DrawBorderSides(sideBits);
         }
 
       } else if (mBorderStyles[sides[0]] == NS_STYLE_BORDER_STYLE_DASHED &&
-           mBorderStyles[sides[0]] == NS_STYLE_BORDER_STYLE_DASHED &&
+           mBorderStyles[sides[1]] == NS_STYLE_BORDER_STYLE_DASHED &&
            mInnerRadii[corner].width && mInnerRadii[corner].height) {
           DrawDashedCorner(corner);
       } else {
@@ -2270,22 +2265,22 @@ nsCSSBorderRenderer::DrawBorders()
         mContext->PushGroup(gfxASurface::CONTENT_COLOR_ALPHA);
         mContext->SetOperator(gfxContext::OPERATOR_ADD);
 
-          for (int cornerSide = 0; cornerSide < 2; cornerSide++) {
-            mozilla::css::Side side = mozilla::css::Side(sides[cornerSide]);
-            PRUint8 style = mBorderStyles[side];
+        for (int cornerSide = 0; cornerSide < 2; cornerSide++) {
+          mozilla::css::Side side = mozilla::css::Side(sides[cornerSide]);
+          PRUint8 style = mBorderStyles[side];
 
-            SF("corner: %d cornerSide: %d side: %d style: %d\n", corner, cornerSide, side, style);
+          SF("corner: %d cornerSide: %d side: %d style: %d\n", corner, cornerSide, side, style);
 
-            mContext->Save();
+          mContext->Save();
 
-            mContext->NewPath();
-            DoSideClipSubPath(side);
-            mContext->Clip();
+          mContext->NewPath();
+          DoSideClipSubPath(side);
+          mContext->Clip();
 
-            DrawBorderSides(1 << side);
+          DrawBorderSides(1 << side);
 
-            mContext->Restore();
-          }
+          mContext->Restore();
+        }
 
         mContext->PopGroupToSource();
         mContext->SetOperator(gfxContext::OPERATOR_OVER);
